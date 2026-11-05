@@ -6,7 +6,11 @@ class Robot:
     def __init__(
         self,
         position,
+        velocity,
+
         theta=0.0,
+        omega = 0.0,
+
         radius=1.0,
         mass=1.0,
         propulsion_force=1.0,
@@ -14,10 +18,10 @@ class Robot:
         rotational_drag=1.0,
     ):
         self.position = np.array(position, dtype=float)
-        self.velocity = np.zeros(2, dtype=float)
+        self.velocity = np.array(velocity, dtype=float)
 
         self.theta = float(theta)
-        self.omega = 0.0
+        self.omega = float(omega)
 
         self.radius = radius
         self.mass = mass

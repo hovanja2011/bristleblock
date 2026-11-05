@@ -2,8 +2,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from robot import Robot
-from simulation import step
+from src.bristlebots.robot import Robot
+from src.bristlebots.simulation import step
 
 
 robot = Robot(

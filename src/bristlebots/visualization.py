@@ -9,6 +9,9 @@ from matplotlib.patches import Circle, FancyArrowPatch
 def animate_robots(
     robots,
     trajectory_history,
+    omega_history,
+    theta_history,
+    walls=None,
     box_size=(20, 20),
     interval=30,
     trail_length=100,
@@ -36,8 +39,8 @@ def animate_robots(
 
     width, height = box_size
 
-    ax.set_xlim(0, width)
-    ax.set_ylim(0, height)
+    ax.set_xlim(-1, width)
+    ax.set_ylim(-1, height)
     ax.set_aspect("equal")
 
     ax.set_xlabel("x")
@@ -45,6 +48,16 @@ def animate_robots(
     ax.set_title("Bristle-bot simulation")
 
     ax.grid(alpha=0.2)
+
+    # Draw walls
+    if walls is not None:
+        for wall in walls:
+            ax.plot(
+                [wall.start[0], wall.end[0]],
+                [wall.start[1], wall.end[1]],
+                color="black",
+                linewidth=3,
+            )
 
     # Robot bodies
     circles = []
@@ -98,6 +111,18 @@ def animate_robots(
         verticalalignment="top",
     )
 
+    omega_texts = []
+
+    for robot in robots:
+        text = ax.text(
+            robot.position[0],
+            robot.position[1] + robot.radius + 0.2,
+            "",
+            ha="center",
+            fontsize=9,
+        )
+        omega_texts.append(text)
+
     def update(frame):
 
         positions = trajectory_history[frame]
@@ -109,8 +134,21 @@ def animate_robots(
             # Update body
             circles[i].center = (x, y)
 
+            omega_texts[i].set_position(
+                (x, y + robot.radius + 0.2)
+            )
+
+            omega_texts[i].set_text(
+                f"ω = {omega_history[frame, i]:.2f}"
+            )
+
             # Update direction arrow
-            direction = robot.direction
+            theta = theta_history[frame, i]
+
+            direction = np.array([
+                np.cos(theta),
+                np.sin(theta),
+            ])
 
             start = np.array([x, y])
 
@@ -151,6 +189,7 @@ def animate_robots(
             circles
             + arrows
             + trails
+            + omega_texts
             + [time_text]
         )
 

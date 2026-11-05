@@ -1,9 +1,9 @@
 
 import matplotlib.pyplot as plt
 
-from robot import Robot
-from simulation import step
-from visualization import animate_robots
+from src.bristlebots.robot import Robot
+from src.bristlebots.simulation import step
+from src.bristlebots.visualization import animate_robots
 
 
 # Create one robot
