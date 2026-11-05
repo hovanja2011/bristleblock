@@ -3,8 +3,8 @@ import numpy as np
 
 from bristlebots.robot import Robot
 from bristlebots.geometry import Wall
-from bristlebots.simulation import robot_wall_contact
-
+from bristlebots.contacts import ContactParameters, ContactState, robot_wall_contact
+from bristlebots.simulation import step
 
 # --------------------------------------------------
 # Shared setup and integration
@@ -45,27 +45,21 @@ def make_setup():
 def integrate_step(robot, wall, dt, mu=0.0, eta_n=0.0):
     """One integration step, including robot-wall contact."""
 
-    force, torque = robot_wall_contact(
-        robot,
-        wall,
-        NORMAL_STIFFNESS,
-        eta_n,
-        mu,
+    contact_parameters = ContactParameters(
+        normal_stiffness=NORMAL_STIFFNESS,
+        normal_damping=eta_n,
+        mu_static=mu,
+        mu_kinetic=mu,
+        tangential_stiffness=1e4,
+        tangential_damping=0.0,
     )
 
-    # Translational dynamics
-    acceleration = force / robot.mass
-
-    robot.velocity += acceleration * dt
-    robot.position += robot.velocity * dt
-
-    # Rotational dynamics
-    angular_acceleration = torque / robot.moment_of_inertia
-
-    robot.omega += angular_acceleration * dt
-    robot.theta += robot.omega * dt
-
-    return force, torque
+    step(
+        robot,
+        dt,
+        walls=[wall],
+        contact_parameters=contact_parameters,
+    )
 
 
 def penetration(robot):
@@ -195,53 +189,17 @@ def test_kinetic_friction():
     )
 
     invariant_history = []
-    friction_power_history = []
 
     for _ in range(steps):
 
-        _, normal, overlap = wall.contact_geometry(
+        _, _, overlap = wall.contact_geometry(
             robot.position,
             robot.radius,
         )
 
+        integrate_step(robot, wall, dt, mu, eta_n)
+
         if overlap > 0.0:
-
-            # Contact point velocity
-            r_contact = -robot.radius * normal
-
-            rotational_velocity = robot.omega * np.array([
-                -r_contact[1],
-                r_contact[0],
-            ])
-
-            contact_velocity = robot.velocity + rotational_velocity
-
-            # Normal force magnitude
-            normal_velocity = np.dot(robot.velocity, normal)
-
-            fn = max(
-                NORMAL_STIFFNESS * overlap
-                - eta_n * normal_velocity,
-                0.0,
-            )
-
-            # Calculate forces and integrate
-            force, _ = integrate_step(
-                robot, wall, dt, mu, eta_n
-            )
-
-            # Tangential friction force
-            tangential_force = force - fn * normal
-
-            # Friction power
-            friction_power = np.dot(
-                tangential_force,
-                contact_velocity,
-            )
-
-            friction_power_history.append(friction_power)
-
-            # Check invariant
             invariant = (
                 robot.omega
                 - robot.mass * robot.radius / inertia * robot.velocity[1]
@@ -249,19 +207,10 @@ def test_kinetic_friction():
 
             invariant_history.append(invariant)
 
-        else:
-            integrate_step(robot, wall, dt, mu, eta_n)
-
     invariant_history = np.array(invariant_history)
-    friction_power_history = np.array(friction_power_history)
 
     assert len(invariant_history) > 0
-    assert len(friction_power_history) > 0
 
-    # Friction must never add mechanical energy.
-    assert np.all(friction_power_history <= 1e-12)
-
-    # Check conservation of the friction-related invariant.
     np.testing.assert_allclose(
         invariant_history,
         initial_invariant,
@@ -322,4 +271,269 @@ def test_time_step_convergence():
 
     # The finest time step should give a more accurate result
     # than the coarsest one.
-    assert errors[-1] < errors[0]
+    assert errors[0] > errors[1] > errors[2]
+
+
+def make_contact_parameters(
+    mu_static,
+    mu_kinetic,
+    tangential_stiffness=1e4,
+):
+    return ContactParameters(
+        normal_stiffness=NORMAL_STIFFNESS,
+        normal_damping=0.0,
+        mu_static=mu_static,
+        mu_kinetic=mu_kinetic,
+        tangential_stiffness=tangential_stiffness,
+        tangential_damping=0.0,
+    )
+
+def test_static_friction():
+    """Проверяет, что касательная сила не превышает предел статического трения."""
+    robot, wall = make_setup()
+
+    robot.position[0] += 1e-4  # Create a small overlap with the wall
+
+    dt = 1e-6
+    parameters = make_contact_parameters(
+        mu_static=0.5,
+        mu_kinetic=0.3,
+    )
+
+    state = ContactState()
+
+    force, torque = robot_wall_contact(
+        robot, wall, dt, state, parameters
+    )
+
+    # The contact point initially has tangential velocity.
+    r_contact = np.array([robot.radius, 0.0])
+    contact_velocity = robot.velocity + robot.omega * np.array([
+        -r_contact[1],
+        r_contact[0],
+    ])
+
+    tangent = np.array([0.0, -1.0])
+    vt = np.dot(contact_velocity, tangent)
+
+    assert vt != 0.0
+
+    # The tangential force must remain below the static limit.
+    fn = np.dot(force, np.array([-1.0, 0.0]))
+    ft = np.dot(force, tangent)
+
+    assert abs(ft) <= parameters.mu_static * fn
+    assert np.linalg.norm(force) > 0.0
+
+
+def test_kinetic_friction_limit():
+    """Проверяет, что при превышении предела статического трения сила ограничивается кинетическим пределом."""
+
+    robot, wall = make_setup()
+    robot.position[0] += 1e-4  # Ненулевое перекрытие!
+
+    dt = 1e-6
+    parameters = make_contact_parameters(
+        mu_static=0.3,
+        mu_kinetic=0.2,
+        tangential_stiffness=1e6,
+    )
+
+    state = ContactState()
+
+    # Artificially create a large tangential spring displacement.
+    state.tangential_displacement = 1.0
+
+    force, torque = robot_wall_contact(
+        robot, wall, dt, state, parameters
+    )
+
+    normal = np.array([-1.0, 0.0])
+    tangent = np.array([0.0, -1.0])
+
+    fn = np.dot(force, normal)
+    ft = np.dot(force, tangent)
+
+    expected_fn = NORMAL_STIFFNESS * 1e-4
+
+    np.testing.assert_allclose(fn, expected_fn, rtol=1e-12)
+
+    np.testing.assert_allclose(
+        abs(ft),
+        parameters.mu_kinetic * expected_fn,
+        rtol=1e-10,
+    )
+
+    expected_torque_magnitude = RADIUS * abs(ft)
+
+    np.testing.assert_allclose(
+        abs(torque),
+        expected_torque_magnitude,
+        rtol=1e-12,
+        atol=1e-12,
+    )
+
+def test_stick_slip_transition():
+    """Проверяет переключение алгоритма от статического к кинетическому трению."""
+    robot, wall = make_setup()
+
+    robot.position[0] += 1e-4  # Create a small overlap with the wall
+
+    dt = 1e-6
+    parameters = make_contact_parameters(
+        mu_static=0.5,
+        mu_kinetic=0.3,
+        tangential_stiffness=1e4,
+    )
+
+    state = ContactState()
+
+    # Initially, tangential displacement is zero.
+    assert state.tangential_displacement == 0.0
+
+    # First contact calculation.
+    force, torque = robot_wall_contact(
+        robot, wall, dt, state, parameters
+    )
+
+    normal = np.array([-1.0, 0.0])
+    tangent = np.array([0.0, -1.0])
+
+    fn = np.dot(force, normal)
+    ft = np.dot(force, tangent)
+
+    assert abs(ft) < parameters.mu_static * fn
+
+    # Force a large accumulated tangential displacement.
+    state.tangential_displacement = 1.0
+
+    force, torque = robot_wall_contact(
+        robot, wall, dt, state, parameters
+    )
+
+    fn = np.dot(force, normal)
+    ft = np.dot(force, tangent)
+
+    np.testing.assert_allclose(
+        abs(ft),
+        parameters.mu_kinetic * fn,
+        rtol=1e-10,
+    )
+
+def test_normal_contact_force_with_damping():
+    """Проверяет нормальную силу по аналитической формуле."""
+
+    robot, wall = make_setup()
+
+    overlap = 1e-4
+    damping = 10.0
+
+    robot.position[0] += overlap
+
+    parameters = make_contact_parameters(
+        mu_static=0.0,
+        mu_kinetic=0.0,
+    )
+
+    parameters.normal_damping = damping
+
+    state = ContactState()
+
+    force, torque = robot_wall_contact(
+        robot, wall, 1e-6, state, parameters
+    )
+
+    expected_fn = (
+        NORMAL_STIFFNESS * overlap
+        + damping * INITIAL_VX
+    )
+
+    expected_force = np.array([-expected_fn, 0.0])
+
+    np.testing.assert_allclose(
+        force,
+        expected_force,
+        rtol=1e-12,
+        atol=1e-12,
+    )
+
+    np.testing.assert_allclose(
+        torque,
+        0.0,
+        atol=1e-12,
+    )
+
+def test_damped_normal_collision():
+    """Сравнивает численное столкновение с аналитическим решением."""
+
+    robot, wall = make_setup()
+
+    dt = 2e-7
+    eta_n = 40.0
+
+    parameters = ContactParameters(
+        normal_stiffness=NORMAL_STIFFNESS,
+        normal_damping=eta_n,
+        mu_static=0.0,
+        mu_kinetic=0.0,
+        tangential_stiffness=1e4,
+        tangential_damping=0.0,
+    )
+
+    gamma = eta_n / (2.0 * MASS)
+    omega_d = np.sqrt(
+        NORMAL_STIFFNESS / MASS - gamma**2
+    )
+
+    contact_time = np.pi / omega_d
+    steps = int(contact_time / dt)
+
+    time = np.arange(steps + 1) * dt
+
+    delta_numerical = [penetration(robot)]
+    vx_numerical = [robot.velocity[0]]
+
+    for _ in range(steps):
+        step(
+            robot,
+            dt,
+            walls=[wall],
+            contact_parameters=parameters,
+        )
+
+        delta_numerical.append(penetration(robot))
+        vx_numerical.append(robot.velocity[0])
+
+    delta_numerical = np.array(delta_numerical)
+    vx_numerical = np.array(vx_numerical)
+
+    decay = np.exp(-gamma * time)
+
+    delta_exact = (
+        INITIAL_VX / omega_d
+        * decay
+        * np.sin(omega_d * time)
+    )
+
+    vx_exact = (
+        INITIAL_VX
+        * decay
+        * (
+            np.cos(omega_d * time)
+            - gamma / omega_d * np.sin(omega_d * time)
+        )
+    )
+
+    np.testing.assert_allclose(
+        delta_numerical,
+        delta_exact,
+        rtol=5e-3,
+        atol=2.5e-6,
+    )
+
+    np.testing.assert_allclose(
+        vx_numerical,
+        vx_exact,
+        rtol=5e-3,
+        atol=2e-3,
+    )

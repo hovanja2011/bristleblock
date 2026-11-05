@@ -31,6 +31,9 @@ class Robot:
         self.translational_drag = translational_drag
         self.rotational_drag = rotational_drag
 
+        # Persistent states of robot-wall contacts
+        self.wall_contact_states = {}
+
     @property
     def direction(self):
         return np.array([
