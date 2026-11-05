@@ -13,9 +13,9 @@ class Robot:
 
         radius=1.0,
         mass=1.0,
-        propulsion_force=1.0,
-        translational_drag=1.0,
-        rotational_drag=1.0,
+        propulsion_force=0.0,
+        translational_drag=0.0,
+        rotational_drag=0.0,
     ):
         self.position = np.array(position, dtype=float)
         self.velocity = np.array(velocity, dtype=float)
