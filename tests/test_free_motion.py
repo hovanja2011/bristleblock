@@ -2,12 +2,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.bristlebots.robot import Robot
-from src.bristlebots.simulation import step
+from bristlebots.robot import Robot
+from bristlebots.simulation import step
 
 
 robot = Robot(
     position=[0.0, 0.0],
+    velocity=[0.0, 0.0],
     theta=0.0,
     radius=1.0,
     mass=1.0,

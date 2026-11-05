@@ -3,18 +3,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from bristlebots.robot import Robot
-from ..src.bristlebots.geometry import Wall
-from ..src.bristlebots.simulation import robot_wall_contact
-from ..src.bristlebots.visualization import animate_robots
+from bristlebots.geometry import Wall
+from bristlebots.simulation import robot_wall_contact
+from bristlebots.visualization import animate_robots
 
 # Vertical wall at x = 5
-wall = Wall(start=[5.0, -5.0], end=[5.0, 5.0])
+wall_position = 1.0
+wall = Wall(start=[wall_position, -1.0], end=[wall_position, 5.0])
 
 robot = Robot(
     position=np.array([0.0, 0.0]),
     velocity=np.array([20.0, 5.0]),
     theta=0.0,
-    omega=5.0,
+    omega=15.0,
     radius=0.5,
     mass=1.0,
     propulsion_force=0.0,
@@ -22,10 +23,10 @@ robot = Robot(
     rotational_drag=0.0,
 )
 
-k_n = 10000.0
-eta_n = 20.0
+k_n = 4e5
+eta_n = 40.0
 
-dt = 1e-4
+dt = 5e-5
 total_time = 2.0
 steps = int(total_time / dt)
 
@@ -72,7 +73,7 @@ theta_history = np.array(theta_history)
 omega_history = np.array(omega_history)
 
 # проверяем, на сколько "мягкая" стенка
-contact_position = 5.0 - robot.radius
+contact_position = wall_position - robot.radius
 
 max_penetration = np.max(x) - contact_position
 penetration_fraction = max_penetration / robot.radius
@@ -87,7 +88,7 @@ animation = animate_robots(
     omega_history=omega_history,
     theta_history=theta_history,
     walls=[wall],
-    box_size=(6, 2),
+    box_size=(wall_position+1, 2),
     interval=1,
     trail_length=500,
 )
@@ -97,7 +98,7 @@ plt.show()
 fig, axes = plt.subplots(2, 1, figsize=(8, 6))
 
 axes[0].plot(time, x)
-axes[0].axhline(4.5, color="red", linestyle="--",
+axes[0].axhline(wall_position-0.5, color="red", linestyle="--",
                  label="Contact position")
 axes[0].set_ylabel("x")
 axes[0].legend()

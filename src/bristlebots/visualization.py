@@ -9,8 +9,8 @@ from matplotlib.patches import Circle, FancyArrowPatch
 def animate_robots(
     robots,
     trajectory_history,
-    omega_history,
-    theta_history,
+    omega_history=None,
+    theta_history=None,
     walls=None,
     box_size=(20, 20),
     interval=30,
@@ -35,6 +35,7 @@ def animate_robots(
         number of previous positions displayed
     """
 
+
     fig, ax = plt.subplots(figsize=(8, 8))
 
     width, height = box_size
@@ -48,6 +49,16 @@ def animate_robots(
     ax.set_title("Bristle-bot simulation")
 
     ax.grid(alpha=0.2)
+
+    # Update theta/omega_history
+    n_frames = len(trajectory_history)
+    n_robots = len(robots)
+
+    if theta_history is None:
+        theta_history = np.zeros((n_frames, n_robots))
+
+    if omega_history is None:
+        omega_history = np.zeros((n_frames, n_robots))
 
     # Draw walls
     if walls is not None:
@@ -134,10 +145,10 @@ def animate_robots(
             # Update body
             circles[i].center = (x, y)
 
+            # Update angular velocity text
             omega_texts[i].set_position(
                 (x, y + robot.radius + 0.2)
             )
-
             omega_texts[i].set_text(
                 f"ω = {omega_history[frame, i]:.2f}"
             )
@@ -151,16 +162,9 @@ def animate_robots(
             ])
 
             start = np.array([x, y])
+            end = start + robot.radius * direction
 
-            end = (
-                start
-                + robot.radius * direction
-            )
-
-            arrows[i].set_positions(
-                start,
-                end,
-            )
+            arrows[i].set_positions(start, end)
 
             # Update trajectory
             start_frame = max(
@@ -185,6 +189,12 @@ def animate_robots(
             f"Frame: {frame}"
         )
 
+        ax.add_patch(arrow)
+        arrows.append(arrow)
+
+        if theta_history is None:
+            arrow.set_visible(False)
+
         return (
             circles
             + arrows
@@ -198,7 +208,7 @@ def animate_robots(
         update,
         frames=len(trajectory_history),
         interval=interval,
-        blit=True,
+        blit=False,
     )
 
     plt.tight_layout()
