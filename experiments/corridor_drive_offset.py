@@ -106,15 +106,14 @@ def run_simulation(offset):
     )
 
     position_history = np.zeros((len(TIME), 2))
-    velocity_history = np.zeros((len(TIME), 2))
     theta_history = np.zeros(len(TIME))
     omega_history = np.zeros(len(TIME))
     speed_history = np.zeros(len(TIME))
+    diagnostics_history = []
 
     for i in range(len(TIME)):
 
         position_history[i] = robot.position
-        velocity_history[i] = robot.velocity
         theta_history[i] = robot.theta
         omega_history[i] = robot.omega
         speed_history[i] = np.linalg.norm(robot.velocity)
@@ -122,21 +121,65 @@ def run_simulation(offset):
         if i == len(TIME) - 1:
             break
 
-        step(
+        diagnostics = step(
             robot,
             DT,
             walls=walls,
             contact_parameters=contact_parameters,
         )
 
+        diagnostics_history.append(diagnostics)
+
+    diagnostic_arrays = {
+        # Forces
+        "propulsion_force": np.array([
+            d["propulsion_force"] for d in diagnostics_history
+        ]),
+        "drag_force": np.array([
+            d["drag_force"] for d in diagnostics_history
+        ]),
+        "normal_contact_force": np.array([
+            d["normal_contact_force"] for d in diagnostics_history
+        ]),
+        "tangential_contact_force": np.array([
+            d["tangential_contact_force"] for d in diagnostics_history
+        ]),
+        "total_contact_force": np.array([
+            d["total_contact_force"] for d in diagnostics_history
+        ]),
+        "total_force": np.array([
+            d["total_force"] for d in diagnostics_history
+        ]),
+
+        # Torques
+        "propulsion_torque": np.array([
+            d["propulsion_torque"] for d in diagnostics_history
+        ]),
+        "rotational_drag_torque": np.array([
+            d["rotational_drag_torque"] for d in diagnostics_history
+        ]),
+        "normal_contact_torque": np.array([
+            d["normal_contact_torque"] for d in diagnostics_history
+        ]),
+        "tangential_contact_torque": np.array([
+            d["tangential_contact_torque"] for d in diagnostics_history
+        ]),
+        "total_contact_torque": np.array([
+            d["total_contact_torque"] for d in diagnostics_history
+        ]),
+        "total_torque": np.array([
+            d["total_torque"] for d in diagnostics_history
+        ]),
+    }
+
     return {
         "offset": offset,
         "robot": robot,
         "position": position_history,
-        "velocity": velocity_history,
         "theta": theta_history,
         "omega": omega_history,
         "speed": speed_history,
+        "diagnostic_arrays": diagnostic_arrays,
     }
 
 
@@ -148,16 +191,45 @@ results = []
 
 for offset in OFFSET_VALUES:
 
-    print(f"Running b/R = {offset:.3f}")
+    print(f"Running b/R = {offset:.2f}")
 
     results.append(run_simulation(offset))
 
 
 # ============================================================
+# 6.1. Diagnostic data check
+# ============================================================
+
+print("\nDiagnostic data check")
+
+for r in results:
+
+    diagnostics = r["diagnostic_arrays"]
+
+    print(f"\nb/R = {r['offset']:.3f}")
+
+    print(
+        "Number of diagnostic steps:",
+        len(diagnostics["total_force"]),
+    )
+
+    print("Available quantities:")
+    print(list(diagnostics.keys()))
+
+    print("Total force at first step:")
+    print(diagnostics["total_force"][0])
+
+    print("Normal contact force at first step:")
+    print(diagnostics["normal_contact_force"][0])
+
+    print("Tangential contact force at first step:")
+    print(diagnostics["tangential_contact_force"][0])
+
+# ============================================================
 # 7. Final-state table
 # ============================================================
 
-print("\nFinal-state averages")
+print("\nMean values over the final 10% of simulation")
 print("-" * 75)
 print(
     f"{'b / R':>10} {'Angle':>12} "
@@ -169,9 +241,14 @@ final_start = int(0.9 * len(TIME))
 
 for r in results:
 
-    theta_deg = np.rad2deg(r["theta"])
+    theta_final = r["theta"][final_start:]
 
-    final_angle = np.mean(theta_deg[final_start:])
+    final_angle = np.rad2deg(
+        np.arctan2(
+            np.mean(np.sin(theta_final)),
+            np.mean(np.cos(theta_final)),
+        )
+    )
     final_speed = np.mean(r["speed"][final_start:])
     final_omega = np.mean(r["omega"][final_start:])
     final_y = np.mean(r["position"][final_start:, 1])
@@ -316,9 +393,155 @@ animation = animate_robots(
     figsize=(12, 5),
 )
 
-
 # ============================================================
-# 11. Display
+# 7. Diagnostic plots: 5 robots in 3 figures
 # ============================================================
 
+force_components = [
+    ("propulsion_force", "Propulsion"),
+    ("drag_force", "Drag"),
+    ("normal_contact_force", "Normal contact"),
+    ("tangential_contact_force", "Tangential contact"),
+]
+
+torque_components = [
+    ("propulsion_torque", "Propulsion"),
+    ("rotational_drag_torque", "Rotational drag"),
+    ("normal_contact_torque", "Normal contact"),
+    ("tangential_contact_torque", "Tangential contact"),
+]
+
+time_diagnostics = TIME[:-1]
+
+# ------------------------------------------------------------
+# Figure 1: X components of forces
+# ------------------------------------------------------------
+
+fig_x, axes_x = plt.subplots(
+    len(results), 1,
+    figsize=(13, 14),
+    sharex=True
+)
+
+for i, r in enumerate(results):
+
+    offset = r["offset"]
+    diagnostics = r["diagnostic_arrays"]
+
+    ax = axes_x[i]
+
+    for key, label in force_components:
+        ax.plot(
+            time_diagnostics,
+            diagnostics[key][:, 0],
+            label=label
+        )
+
+    ax.set_ylabel("Force x")
+    ax.set_title(f"b/R = {offset:.3f}")
+    ax.grid(True)
+
+axes_x[-1].set_xlabel("Time")
+
+fig_x.suptitle("X components of forces")
+
+handles, labels = axes_x[0].get_legend_handles_labels()
+
+fig_x.legend(
+    handles,
+    labels,
+    loc="upper center",
+    ncol=4,
+    bbox_to_anchor=(0.5, 0.97)
+)
+
+fig_x.tight_layout(rect=[0, 0, 1, 0.94])
+
+
+# ------------------------------------------------------------
+# Figure 2: Y components of forces
+# ------------------------------------------------------------
+
+fig_y, axes_y = plt.subplots(
+    len(results), 1,
+    figsize=(13, 14),
+    sharex=True
+)
+
+for i, r in enumerate(results):
+
+    offset = r["offset"]
+    diagnostics = r["diagnostic_arrays"]
+
+    ax = axes_y[i]
+
+    for key, label in force_components:
+        ax.plot(
+            time_diagnostics,
+            diagnostics[key][:, 1],
+            label=label
+        )
+
+    ax.set_ylabel("Force y")
+    ax.set_title(f"b/R = {offset:.3f}")
+    ax.grid(True)
+
+axes_y[-1].set_xlabel("Time")
+
+fig_y.suptitle("Y components of forces")
+handles, labels = axes_y[0].get_legend_handles_labels()
+
+fig_y.legend(
+    handles,
+    labels,
+    loc="upper center",
+    ncol=4,
+    bbox_to_anchor=(0.5, 0.97)
+)
+
+fig_y.tight_layout(rect=[0, 0, 1, 0.94])
+
+
+# ------------------------------------------------------------
+# Figure 3: Torque components
+# ------------------------------------------------------------
+
+fig_torque, axes_torque = plt.subplots(
+    len(results), 1,
+    figsize=(13, 14),
+    sharex=True
+)
+
+for i, r in enumerate(results):
+
+    offset = r["offset"]
+    diagnostics = r["diagnostic_arrays"]
+
+    ax = axes_torque[i]
+
+    for key, label in torque_components:
+        ax.plot(
+            time_diagnostics,
+            diagnostics[key],
+            label=label
+        )
+
+    ax.set_ylabel("Torque")
+    ax.set_title(f"b/R = {offset:.3f}")
+    ax.grid(True)
+
+axes_torque[-1].set_xlabel("Time")
+
+fig_torque.suptitle("Torque components")
+handles, labels = axes_torque[0].get_legend_handles_labels()
+
+fig_torque.legend(
+    handles,
+    labels,
+    loc="upper center",
+    ncol=4,
+    bbox_to_anchor=(0.5, 0.97)
+)
+
+fig_torque.tight_layout(rect=[0, 0, 1, 0.94])
 plt.show()

@@ -35,6 +35,21 @@ class ContactParameters:
 class ContactState:
     tangential_displacement: float = 0.0
 
+@dataclass
+class ContactResult:
+    normal_force: np.ndarray
+    tangential_force: np.ndarray
+    total_force: np.ndarray
+
+    normal_torque: float
+    tangential_torque: float
+    total_torque: float
+
+    overlap: float
+    normal_force_magnitude: float
+    tangential_force_magnitude: float
+    tangential_velocity: float
+    mode: str
 
 def robot_wall_contact(robot, wall, dt, state, parameters):
     """
@@ -59,7 +74,24 @@ def robot_wall_contact(robot, wall, dt, state, parameters):
     # No contact: erase the contact history.
     if overlap <= 0.0:
         state.tangential_displacement = 0.0
-        return np.zeros(2), 0.0
+
+        zero = np.zeros(2)
+
+        return ContactResult(
+            normal_force=zero.copy(),
+            tangential_force=zero.copy(),
+            total_force=zero.copy(),
+
+            normal_torque=0.0,
+            tangential_torque=0.0,
+            total_torque=0.0,
+
+            overlap=overlap,
+            normal_force_magnitude=0.0,
+            tangential_force_magnitude=0.0,
+            tangential_velocity=0.0,
+            mode="no_contact",
+        )
 
     # Normal contact force
     normal_velocity = np.dot(robot.velocity, normal)
@@ -75,7 +107,24 @@ def robot_wall_contact(robot, wall, dt, state, parameters):
     # there can be no friction force.
     if fn <= 0.0:
         state.tangential_displacement = 0.0
-        return np.zeros(2), 0.0
+
+        zero = np.zeros(2)
+
+        return ContactResult(
+            normal_force=zero.copy(),
+            tangential_force=zero.copy(),
+            total_force=zero.copy(),
+
+            normal_torque=0.0,
+            tangential_torque=0.0,
+            total_torque=0.0,
+
+            overlap=overlap,
+            normal_force_magnitude=0.0,
+            tangential_force_magnitude=0.0,
+            tangential_velocity=0.0,
+            mode="no_load",
+        )
 
     normal_force = fn * normal
 
@@ -133,12 +182,39 @@ def robot_wall_contact(robot, wall, dt, state, parameters):
     tangential_force = tangential_force_magnitude * tangent
 
     # Total force
-    force = normal_force + tangential_force
+    total_force = normal_force + tangential_force
 
     # Torque around robot center
-    torque = (
+    normal_torque = (
+        r_contact[0] * normal_force[1]
+        - r_contact[1] * normal_force[0]
+    )
+
+    tangential_torque = (
         r_contact[0] * tangential_force[1]
         - r_contact[1] * tangential_force[0]
     )
 
-    return force, torque
+    total_torque = normal_torque + tangential_torque
+
+    # Contact mode
+    if abs(trial_force) <= static_limit:
+        mode = "sticking"
+    else:
+        mode = "sliding"
+
+    return ContactResult(
+        normal_force=normal_force,
+        tangential_force=tangential_force,
+        total_force=total_force,
+
+        normal_torque=normal_torque,
+        tangential_torque=tangential_torque,
+        total_torque=total_torque,
+
+        overlap=overlap,
+        normal_force_magnitude=fn,
+        tangential_force_magnitude=abs(tangential_force_magnitude),
+        tangential_velocity=tangential_velocity,
+        mode=mode,
+    )
