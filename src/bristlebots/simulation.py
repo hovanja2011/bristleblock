@@ -22,10 +22,31 @@ def compute_forces(robot):
 
 
 def compute_torque(robot):
-    return (
-        -robot.rotational_drag
-        * robot.omega
+
+    # Rotational drag
+    torque = -robot.rotational_drag * robot.omega
+
+    # Rotate propulsion offset from body frame to world frame
+    c = np.cos(robot.theta)
+    s = np.sin(robot.theta)
+
+    x_body, y_body = robot.propulsion_offset
+
+    r_x = c * x_body - s * y_body
+    r_y = s * x_body + c * y_body
+
+    # Propulsion force in world coordinates
+    force_x = robot.propulsion_force * c
+    force_y = robot.propulsion_force * s
+
+    # 2D cross product: r x F
+    propulsion_torque = (
+        r_x * force_y - r_y * force_x
     )
+
+    torque += propulsion_torque
+
+    return torque
 
 
 def step(robot, dt, walls=None, contact_parameters=None):

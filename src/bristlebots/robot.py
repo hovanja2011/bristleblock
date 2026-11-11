@@ -16,6 +16,7 @@ class Robot:
         propulsion_force=0.0,
         translational_drag=0.0,
         rotational_drag=0.0,
+        propulsion_offset=(0.0, 0.0),
     ):
         self.position = np.array(position, dtype=float)
         self.velocity = np.array(velocity, dtype=float)
@@ -33,6 +34,11 @@ class Robot:
 
         # Persistent states of robot-wall contacts
         self.wall_contact_states = {}
+
+        self.propulsion_offset = np.asarray(
+            propulsion_offset,
+            dtype=float,
+        )
 
     @property
     def direction(self):

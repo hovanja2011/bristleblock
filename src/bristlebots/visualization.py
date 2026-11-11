@@ -170,8 +170,8 @@ def animate_robots(
 
     fig, ax = plt.subplots(figsize=figsize)
 
-    ax.set_xlim(-1, width)
-    ax.set_ylim(-1, height)
+    ax.set_xlim(-1, width+1)
+    ax.set_ylim(-1, height+1)
 
     ax.set_aspect("equal")
 
@@ -253,6 +253,33 @@ def animate_robots(
 
         trails.append(line)
 
+
+    # --------------------------------------------------
+    # Drive point legend
+    # --------------------------------------------------
+
+    legend_labels = []
+
+    for i, robot in enumerate(robots):
+
+        offset = np.asarray(
+            getattr(robot, "propulsion_offset", [0.0, 0.0]),
+            dtype=float,
+        )
+
+        b = offset[1]
+
+        legend_labels.append(
+            f"Robot {i + 1}: b/R = {b / robot.radius:.3f}"
+        )
+
+    ax.legend(
+        trails,
+        legend_labels,
+        loc="upper right",
+        fontsize=9,
+        title="Propulsion point",
+    )
     # --------------------------------------------------
     # Create angular velocity labels
     # --------------------------------------------------
