@@ -34,6 +34,7 @@ class Robot:
 
         # Persistent states of robot-wall contacts
         self.wall_contact_states = {}
+        self.robot_contact_states = {}
 
         self.propulsion_offset = np.asarray(
             propulsion_offset,

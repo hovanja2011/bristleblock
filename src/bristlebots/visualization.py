@@ -17,6 +17,7 @@ def animate_robots(
     trail_length=100,
     show_trails=True,
     show_angular_velocity=True,
+    show_propulsion_point=True,
     show_time=True,
     show_grid=True,
     robot_colors=None,
@@ -61,6 +62,9 @@ def animate_robots(
 
     show_angular_velocity : bool
         Whether to display angular velocity values.
+
+    show_propulsion_point : bool
+        Whether to display the propulsion point on each robot.
 
     show_time : bool
         Whether to display the current frame number.
@@ -236,6 +240,56 @@ def animate_robots(
         arrows.append(arrow)
 
     # --------------------------------------------------
+    # Create propulsion point markers
+    # --------------------------------------------------
+
+    propulsion_points = []
+    propulsion_lines = []
+
+    for i, robot in enumerate(robots):
+
+        offset = np.asarray(
+            robot.propulsion_offset,
+            dtype=float,
+        )
+
+        theta = theta_history[0, i]
+
+        rotation = np.array([
+            [np.cos(theta), -np.sin(theta)],
+            [np.sin(theta),  np.cos(theta)],
+        ])
+
+        point_position = (
+            trajectory_history[0, i]
+            + rotation @ offset
+        )
+
+        # Line connecting robot center and propulsion point
+        line, = ax.plot(
+            [],
+            [],
+            color="red",
+            linewidth=1.5,
+            linestyle="--",
+            alpha=0.8,
+        )
+
+        # Propulsion point marker
+        point = Circle(
+            point_position,
+            radius=0.07,
+            facecolor="red",
+            edgecolor="black",
+            zorder=5,
+        )
+
+        ax.add_patch(point)
+
+        propulsion_lines.append(line)
+        propulsion_points.append(point)
+
+    # --------------------------------------------------
     # Create trajectory lines
     # --------------------------------------------------
 
@@ -338,6 +392,38 @@ def animate_robots(
 
             arrows[i].set_positions(start, end)
 
+            # Update propulsion point
+            if show_propulsion_point:
+
+                offset = np.asarray(
+                    robot.propulsion_offset,
+                    dtype=float,
+                )
+
+                rotation = np.array([
+                    [np.cos(theta), -np.sin(theta)],
+                    [np.sin(theta),  np.cos(theta)],
+                ])
+
+                propulsion_position = (
+                    np.array([x, y])
+                    + rotation @ offset
+                )
+
+                propulsion_points[i].center = propulsion_position
+
+                propulsion_lines[i].set_data(
+                    [x, propulsion_position[0]],
+                    [y, propulsion_position[1]],
+                )
+
+            else:
+                propulsion_points[i].set_offsets(
+                    np.empty((0, 2))
+                )
+
+                propulsion_lines[i].set_data([], [])
+
             # Update angular velocity label
             omega_texts[i].set_position(
                 (x, y + robot.radius + 0.2)
@@ -381,6 +467,8 @@ def animate_robots(
             circles
             + arrows
             + trails
+            + propulsion_points
+            + propulsion_lines
             + omega_texts
             + [time_text]
         )

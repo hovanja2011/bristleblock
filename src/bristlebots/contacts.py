@@ -34,6 +34,7 @@ class ContactParameters:
 @dataclass
 class ContactState:
     tangential_displacement: float = 0.0
+    previous_tangent: np.ndarray | None = None
 
 @dataclass
 class ContactResult:
@@ -214,6 +215,202 @@ def robot_wall_contact(robot, wall, dt, state, parameters):
 
         overlap=overlap,
         normal_force_magnitude=fn,
+        tangential_force_magnitude=abs(tangential_force_magnitude),
+        tangential_velocity=tangential_velocity,
+        mode=mode,
+    )
+
+@dataclass
+class RobotContactResult:
+    force_on_first: np.ndarray
+    force_on_second: np.ndarray
+
+    torque_on_first: float
+    torque_on_second: float
+
+    overlap: float
+    normal_force_magnitude: float
+    tangential_force_magnitude: float
+
+    tangential_velocity: float
+    mode: str
+
+
+def robot_robot_contact(
+    robot_a,
+    robot_b,
+    dt,
+    state,
+    parameters,
+):
+    if dt <= 0:
+        raise ValueError("Time step must be positive.")
+
+    displacement = robot_b.position - robot_a.position
+    distance = np.linalg.norm(displacement)
+
+    overlap = robot_a.radius + robot_b.radius - distance
+
+    if overlap <= 0:
+        state.tangential_displacement = 0.0
+        state.previous_tangent = None
+
+        return RobotContactResult(
+            force_on_first=np.zeros(2),
+            force_on_second=np.zeros(2),
+            torque_on_first=0.0,
+            torque_on_second=0.0,
+            overlap=0.0,
+            normal_force_magnitude=0.0,
+            tangential_force_magnitude=0.0,
+            tangential_velocity=0.0,
+            mode="no_contact",
+        )
+
+    # Normal from robot_a to robot_b
+    if distance > 1e-12:
+        normal = displacement / distance
+    else:
+        normal = np.array([1.0, 0.0])
+
+    tangent = np.array([-normal[1], normal[0]])
+
+    # Relative normal velocity:
+    # positive means that robots are separating
+    normal_velocity = np.dot(
+        robot_b.velocity - robot_a.velocity,
+        normal,
+    )
+
+    normal_force_magnitude = max(
+        0.0,
+        parameters.normal_stiffness * overlap
+        - parameters.normal_damping * normal_velocity,
+    )
+
+    if normal_force_magnitude <= 0:
+        state.tangential_displacement = 0.0
+        state.previous_tangent = None
+
+        return RobotContactResult(
+            force_on_first=np.zeros(2),
+            force_on_second=np.zeros(2),
+            torque_on_first=0.0,
+            torque_on_second=0.0,
+            overlap=overlap,
+            normal_force_magnitude=0.0,
+            tangential_force_magnitude=0.0,
+            tangential_velocity=0.0,
+            mode="no_load",
+        )
+
+    # Contact radius vectors
+    r_a = robot_a.radius * normal
+    r_b = -robot_b.radius * normal
+
+    # Velocity of each contact point
+    velocity_a = robot_a.velocity + robot_a.omega * np.array([
+        -r_a[1],
+        r_a[0],
+    ])
+
+    velocity_b = robot_b.velocity + robot_b.omega * np.array([
+        -r_b[1],
+        r_b[0],
+    ])
+
+    # Relative tangential velocity
+    relative_velocity = velocity_a - velocity_b
+
+    tangential_velocity = np.dot(
+        relative_velocity,
+        tangent,
+    )
+
+    # Rotate the stored tangential displacement
+    # into the new tangent direction
+    if state.previous_tangent is not None:
+        old_displacement = (
+            state.tangential_displacement
+            * state.previous_tangent
+        )
+
+        state.tangential_displacement = np.dot(
+            old_displacement,
+            tangent,
+        )
+
+    state.previous_tangent = tangent.copy()
+
+    # Update tangential displacement
+    state.tangential_displacement += (
+        tangential_velocity * dt
+    )
+
+    trial_force = (
+        -parameters.tangential_stiffness
+        * state.tangential_displacement
+        -parameters.tangential_damping
+        * tangential_velocity
+    )
+
+    static_limit = (
+        parameters.mu_static * normal_force_magnitude
+    )
+
+    kinetic_limit = (
+        parameters.mu_kinetic * normal_force_magnitude
+    )
+
+    if abs(trial_force) <= static_limit:
+        tangential_force_magnitude = trial_force
+        mode = "sticking"
+
+    else:
+        if abs(tangential_velocity) > 1e-12:
+            sign = np.sign(tangential_velocity)
+        else:
+            sign = np.sign(trial_force)
+
+        tangential_force_magnitude = -kinetic_limit * sign
+        mode = "sliding"
+
+    # Correct the stored displacement after friction clipping
+    state.tangential_displacement = (
+        -tangential_force_magnitude
+        - parameters.tangential_damping * tangential_velocity
+    ) / parameters.tangential_stiffness
+
+    # Force acting on the first robot
+    normal_force = -normal_force_magnitude * normal
+
+    tangential_force = (
+        tangential_force_magnitude * tangent
+    )
+
+    force_on_first = normal_force + tangential_force
+
+    # Newton's third law
+    force_on_second = -force_on_first
+
+    # Contact torques
+    torque_on_first = (
+        r_a[0] * tangential_force[1]
+        - r_a[1] * tangential_force[0]
+    )
+
+    torque_on_second = (
+        r_b[0] * (-tangential_force[1])
+        - r_b[1] * (-tangential_force[0])
+    )
+
+    return RobotContactResult(
+        force_on_first=force_on_first,
+        force_on_second=force_on_second,
+        torque_on_first=torque_on_first,
+        torque_on_second=torque_on_second,
+        overlap=overlap,
+        normal_force_magnitude=normal_force_magnitude,
         tangential_force_magnitude=abs(tangential_force_magnitude),
         tangential_velocity=tangential_velocity,
         mode=mode,

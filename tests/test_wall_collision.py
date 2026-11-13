@@ -302,9 +302,11 @@ def test_static_friction():
 
     state = ContactState()
 
-    force, torque = robot_wall_contact(
-        robot, wall, dt, state, parameters
+    result = robot_wall_contact(
+        robot, wall, 1e-6, state, parameters
     )
+
+    force = result.total_force
 
     # The contact point initially has tangential velocity.
     r_contact = np.array([robot.radius, 0.0])
@@ -344,9 +346,12 @@ def test_kinetic_friction_limit():
     # Artificially create a large tangential spring displacement.
     state.tangential_displacement = 1.0
 
-    force, torque = robot_wall_contact(
-        robot, wall, dt, state, parameters
+    result = robot_wall_contact(
+        robot, wall, 1e-6, state, parameters
     )
+
+    force = result.total_force
+    torque = result.total_torque
 
     normal = np.array([-1.0, 0.0])
     tangent = np.array([0.0, -1.0])
@@ -392,9 +397,11 @@ def test_stick_slip_transition():
     assert state.tangential_displacement == 0.0
 
     # First contact calculation.
-    force, torque = robot_wall_contact(
-        robot, wall, dt, state, parameters
+    result = robot_wall_contact(
+        robot, wall, 1e-6, state, parameters
     )
+
+    force = result.total_force
 
     normal = np.array([-1.0, 0.0])
     tangent = np.array([0.0, -1.0])
@@ -407,9 +414,11 @@ def test_stick_slip_transition():
     # Force a large accumulated tangential displacement.
     state.tangential_displacement = 1.0
 
-    force, torque = robot_wall_contact(
-        robot, wall, dt, state, parameters
+    result = robot_wall_contact(
+        robot, wall, 1e-6, state, parameters
     )
+
+    force = result.total_force
 
     fn = np.dot(force, normal)
     ft = np.dot(force, tangent)
@@ -439,9 +448,12 @@ def test_normal_contact_force_with_damping():
 
     state = ContactState()
 
-    force, torque = robot_wall_contact(
+    result = robot_wall_contact(
         robot, wall, 1e-6, state, parameters
     )
+
+    force = result.total_force
+    torque = result.total_torque
 
     expected_fn = (
         NORMAL_STIFFNESS * overlap
