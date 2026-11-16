@@ -14,9 +14,11 @@ class Robot:
         radius=1.0,
         mass=1.0,
         propulsion_force=0.0,
+        active_torque=0.0,
+
         translational_drag=0.0,
         rotational_drag=0.0,
-        propulsion_offset=(0.0, 0.0),
+
     ):
         self.position = np.array(position, dtype=float)
         self.velocity = np.array(velocity, dtype=float)
@@ -29,6 +31,8 @@ class Robot:
         self.moment_of_inertia = 0.5 * mass * radius**2
 
         self.propulsion_force = propulsion_force
+        self.active_torque = active_torque
+
         self.translational_drag = translational_drag
         self.rotational_drag = rotational_drag
 
@@ -36,10 +40,6 @@ class Robot:
         self.wall_contact_states = {}
         self.robot_contact_states = {}
 
-        self.propulsion_offset = np.asarray(
-            propulsion_offset,
-            dtype=float,
-        )
 
     @property
     def direction(self):

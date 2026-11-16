@@ -36,21 +36,7 @@ def step(robot, dt, walls=None, contact_parameters=None):
     rotational_drag_torque = (
         -robot.rotational_drag * robot.omega
     )
-
-    c = np.cos(robot.theta)
-    s = np.sin(robot.theta)
-
-    x_body, y_body = robot.propulsion_offset
-
-    r_x = c * x_body - s * y_body
-    r_y = s * x_body + c * y_body
-
-    force_x = robot.propulsion_force * c
-    force_y = robot.propulsion_force * s
-
-    propulsion_torque = (
-        r_x * force_y - r_y * force_x
-    )
+    active_torque = robot.active_torque
 
     # Contact diagnostics
     normal_contact_force = np.zeros(2)
@@ -101,7 +87,7 @@ def step(robot, dt, walls=None, contact_parameters=None):
     )
 
     total_torque = (
-        propulsion_torque
+        active_torque
         + rotational_drag_torque
         + total_contact_torque
     )
@@ -129,7 +115,7 @@ def step(robot, dt, walls=None, contact_parameters=None):
         "total_contact_force": total_contact_force.copy(),
         "total_force": total_force.copy(),
 
-        "propulsion_torque": propulsion_torque,
+        "active_torque": active_torque,
         "rotational_drag_torque": rotational_drag_torque,
         "normal_contact_torque": normal_contact_torque,
         "tangential_contact_torque": tangential_contact_torque,
@@ -144,6 +130,7 @@ def step_robots(
     dt,
     walls=None,
     contact_parameters=None,
+    external_force=None,
 ):
     """
     Advance a system of robots by one time step.
@@ -171,6 +158,23 @@ def step_robots(
             "Contact parameters must be provided when contacts are enabled."
         )
 
+    if external_force is None:
+        external_force = np.zeros(2)
+    else:
+        external_force = np.asarray(
+            external_force,
+            dtype=float,
+        )
+
+        if external_force.shape != (2,):
+            raise ValueError(
+                "external_force must be a 2D vector."
+            )
+
+        if not np.all(np.isfinite(external_force)):
+            raise ValueError(
+                "external_force must contain finite values."
+            )
     # --------------------------------------------------
     # Initialize force and torque accumulators
     # --------------------------------------------------
@@ -205,20 +209,7 @@ def step_robots(
             -robot.rotational_drag * robot.omega
         )
 
-        c = np.cos(robot.theta)
-        s = np.sin(robot.theta)
-
-        x_body, y_body = robot.propulsion_offset
-
-        r_x = c * x_body - s * y_body
-        r_y = s * x_body + c * y_body
-
-        force_x = robot.propulsion_force * c
-        force_y = robot.propulsion_force * s
-
-        propulsion_torque = (
-            r_x * force_y - r_y * force_x
-        )
+        active_torque = robot.active_torque
 
         # Wall-contact contributions
         normal_contact_force = np.zeros(2)
@@ -263,11 +254,12 @@ def step_robots(
         forces[robot] += (
             propulsion_force
             + drag_force
+            + external_force
             + total_wall_contact_force
         )
 
         torques[robot] += (
-            propulsion_torque
+            active_torque
             + rotational_drag_torque
             + total_wall_contact_torque
         )
@@ -280,7 +272,7 @@ def step_robots(
             "tangential_contact_force": tangential_contact_force.copy(),
             "total_contact_force": total_wall_contact_force.copy(),
 
-            "propulsion_torque": propulsion_torque,
+            "active_torque": active_torque,
             "rotational_drag_torque": rotational_drag_torque,
             "normal_contact_torque": normal_contact_torque,
             "tangential_contact_torque": tangential_contact_torque,
@@ -288,6 +280,8 @@ def step_robots(
 
             "contact_results": contact_results,
             "robot_contact_results": [],
+
+            "external_force": external_force.copy(),
         }
 
     # --------------------------------------------------
@@ -340,12 +334,13 @@ def step_robots(
             forces[robot]
             - diag["propulsion_force"]
             - diag["drag_force"]
+            - external_force
             - diag["total_contact_force"]
         )
 
         robot_robot_torque = (
             torques[robot]
-            - diag["propulsion_torque"]
+            - diag["active_torque"]
             - diag["rotational_drag_torque"]
             - diag["total_contact_torque"]
         )

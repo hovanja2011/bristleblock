@@ -76,13 +76,13 @@ TOTAL_TIME = 40.0
 
 TIME = np.arange(0.0, TOTAL_TIME + DT, DT)
 
-# Signed offsets, measured in units of R.
-OFFSET_VALUES = [
-    -0.02,
-    -0.01,
-    0.0,
-    0.01,
+# Active torque values.
+ACTIVE_TORQUE_VALUES = [
     0.02,
+    0.01,
+    0.0,
+    -0.01,
+    -0.02,
 ]
 
 
@@ -90,7 +90,7 @@ OFFSET_VALUES = [
 # 5. Simulation
 # ============================================================
 
-def run_simulation(offset):
+def run_simulation(active_torque):
 
     robot = Robot(
         position=INITIAL_POSITION.copy(),
@@ -102,7 +102,7 @@ def run_simulation(offset):
         propulsion_force=PROPULSION_FORCE,
         translational_drag=TRANSLATIONAL_DRAG,
         rotational_drag=ROTATIONAL_DRAG,
-        propulsion_offset=np.array([0.0, offset * RADIUS]),
+        active_torque=active_torque,
     )
 
     position_history = np.zeros((len(TIME), 2))
@@ -152,8 +152,8 @@ def run_simulation(offset):
         ]),
 
         # Torques
-        "propulsion_torque": np.array([
-            d["propulsion_torque"] for d in diagnostics_history
+        "active_torque": np.array([
+            d["active_torque"] for d in diagnostics_history
         ]),
         "rotational_drag_torque": np.array([
             d["rotational_drag_torque"] for d in diagnostics_history
@@ -173,7 +173,7 @@ def run_simulation(offset):
     }
 
     return {
-        "offset": offset,
+        "active_torque": active_torque,
         "robot": robot,
         "position": position_history,
         "theta": theta_history,
@@ -189,11 +189,11 @@ def run_simulation(offset):
 
 results = []
 
-for offset in OFFSET_VALUES:
+for active_torque in ACTIVE_TORQUE_VALUES:
 
-    print(f"Running b/R = {offset:.2f}")
+    print(f"Running active torque = {active_torque:.3f}")
 
-    results.append(run_simulation(offset))
+    results.append(run_simulation(active_torque))
 
 
 # ============================================================
@@ -206,7 +206,7 @@ for r in results:
 
     diagnostics = r["diagnostic_arrays"]
 
-    print(f"\nb/R = {r['offset']:.3f}")
+    print(f"\nActive torque = {r['active_torque']:.3f}")
 
     print(
         "Number of diagnostic steps:",
@@ -232,7 +232,7 @@ for r in results:
 print("\nMean values over the final 10% of simulation")
 print("-" * 75)
 print(
-    f"{'b / R':>10} {'Angle':>12} "
+    f"{'Tau_a':>10} {'Angle':>12} "
     f"{'Speed':>12} {'Omega':>12} {'y / R':>12}"
 )
 print("-" * 75)
@@ -254,7 +254,7 @@ for r in results:
     final_y = np.mean(r["position"][final_start:, 1])
 
     print(
-        f"{r['offset']:10.3f} "
+        f"{r['active_torque']:10.3f} "
         f"{final_angle:12.3f} "
         f"{final_speed:12.5f} "
         f"{final_omega:12.5f} "
@@ -273,7 +273,7 @@ for r in results:
     ax.plot(
         r["position"][:, 0] / RADIUS,
         r["position"][:, 1] / RADIUS,
-        label=rf"$b/R={r['offset']}$",
+        label=rf"$\tau_a={r['active_torque']}$",
     )
 
 ax.axhline(0.0, color="black")
@@ -296,7 +296,7 @@ fig, axes = plt.subplots(3, 1, figsize=(10, 11))
 
 for r in results:
 
-    label = rf"$b/R={r['offset']}$"
+    label = rf"$\tau_a={r['active_torque']}$"
 
     axes[0].plot(
         TIME,
@@ -325,7 +325,7 @@ for ax in axes:
     ax.grid(True)
     ax.legend()
 
-fig.suptitle("Effect of propulsion offset")
+fig.suptitle("Effect of active torque")
 fig.tight_layout()
 
 
@@ -405,7 +405,7 @@ force_components = [
 ]
 
 torque_components = [
-    ("propulsion_torque", "Propulsion"),
+    ("active_torque", "Active"),
     ("rotational_drag_torque", "Rotational drag"),
     ("normal_contact_torque", "Normal contact"),
     ("tangential_contact_torque", "Tangential contact"),
@@ -425,7 +425,7 @@ fig_x, axes_x = plt.subplots(
 
 for i, r in enumerate(results):
 
-    offset = r["offset"]
+    active_torque = r["active_torque"]
     diagnostics = r["diagnostic_arrays"]
 
     ax = axes_x[i]
@@ -438,7 +438,7 @@ for i, r in enumerate(results):
         )
 
     ax.set_ylabel("Force x")
-    ax.set_title(f"b/R = {offset:.3f}")
+    ax.set_title(f"Active torque = {active_torque:.3f}")
     ax.grid(True)
 
 axes_x[-1].set_xlabel("Time")
@@ -470,7 +470,7 @@ fig_y, axes_y = plt.subplots(
 
 for i, r in enumerate(results):
 
-    offset = r["offset"]
+    active_torque = r["active_torque"]
     diagnostics = r["diagnostic_arrays"]
 
     ax = axes_y[i]
@@ -483,7 +483,7 @@ for i, r in enumerate(results):
         )
 
     ax.set_ylabel("Force y")
-    ax.set_title(f"b/R = {offset:.3f}")
+    ax.set_title(f"Active torque = {active_torque:.3f}")
     ax.grid(True)
 
 axes_y[-1].set_xlabel("Time")
@@ -514,7 +514,7 @@ fig_torque, axes_torque = plt.subplots(
 
 for i, r in enumerate(results):
 
-    offset = r["offset"]
+    active_torque = r["active_torque"]
     diagnostics = r["diagnostic_arrays"]
 
     ax = axes_torque[i]
@@ -527,7 +527,7 @@ for i, r in enumerate(results):
         )
 
     ax.set_ylabel("Torque")
-    ax.set_title(f"b/R = {offset:.3f}")
+    ax.set_title(f"Active torque = {active_torque:.3f}")
     ax.grid(True)
 
 axes_torque[-1].set_xlabel("Time")

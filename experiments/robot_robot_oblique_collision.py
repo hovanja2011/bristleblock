@@ -35,12 +35,13 @@ def run_simulation(
         "overlap": [],
         "mode": [],
         "xi": [],
-        "propulsion_torque": [],
+        "active_torque": [],
         "contact_torque_a": [],
         "contact_torque_b": [],
         "kinetic_energy": [],
         "angular_velocity_a": [],
         "angular_velocity_b": [],
+        "state_time": [],
     }
 
     robot_a, robot_b = robots
@@ -49,8 +50,8 @@ def run_simulation(
     # Save robot state
     # ----------------------------------------------
 
-    def save_robot_state():
-
+    def save_robot_state(time):
+        history["state_time"].append(time)
         history["trajectory"].append(
             np.array([
                 robot.position.copy()
@@ -72,7 +73,7 @@ def run_simulation(
             ])
         )
 
-    save_robot_state()
+    save_robot_state(0.0)
 
     # ----------------------------------------------
     # Main simulation loop
@@ -123,10 +124,10 @@ def run_simulation(
             state.tangential_displacement
         )
 
-        # Propulsion torques
-        history["propulsion_torque"].append([
-            diagnostics[0]["propulsion_torque"],
-            diagnostics[1]["propulsion_torque"],
+        # Active torques
+        history["active_torque"].append([
+            diagnostics[0]["active_torque"],
+            diagnostics[1]["active_torque"],
         ])
 
         # Contact torques
@@ -160,7 +161,7 @@ def run_simulation(
 
         # Save visualization state
         if (step + 1) % save_every == 0:
-            save_robot_state()
+            save_robot_state(time)
 
     # ----------------------------------------------
     # Convert histories to NumPy arrays
@@ -202,9 +203,9 @@ robot_a = Robot(
     radius=R,
     mass=1.0,
     propulsion_force=0.15,
+    active_torque=0.1275,
     translational_drag=0.1,
     rotational_drag=0.05,
-    propulsion_offset=(0.0, -0.85),
 )
 
 robot_b = Robot(
@@ -215,9 +216,9 @@ robot_b = Robot(
     radius=R,
     mass=1.0,
     propulsion_force=0.15,
+    active_torque=-0.0225,
     translational_drag=0.1,
     rotational_drag=0.05,
-    propulsion_offset=(0.0, 0.15),
 )
 
 # ==================================================
@@ -251,7 +252,7 @@ overlap_history = history["overlap"]
 mode_history = history["mode"]
 xi_history = history["xi"]
 
-propulsion_torque_history = history["propulsion_torque"]
+active_torque_history = history["active_torque"]
 contact_torque_a_history = history["contact_torque_a"]
 contact_torque_b_history = history["contact_torque_b"]
 
@@ -403,13 +404,13 @@ fig, axes = plt.subplots(
 )
 
 axes[0].plot(
-    time_history,
+    history["state_time"],
     omega_history[:, 0],
     label="Robot A",
 )
 
 axes[0].plot(
-    time_history,
+    history["state_time"],
     omega_history[:, 1],
     label="Robot B",
 )
@@ -420,17 +421,17 @@ axes[0].legend()
 axes[0].grid()
 
 
-# Compare propulsion and contact torques
+# Compare active torque and contact torques
 axes[1].plot(
     time_history,
-    propulsion_torque_history[:, 0],
-    label="Propulsion torque A",
+    active_torque_history[:, 0],
+    label="Active torque A",
 )
 
 axes[1].plot(
     time_history,
-    propulsion_torque_history[:, 1],
-    label="Propulsion torque B",
+    active_torque_history[:, 1],
+    label="Active torque B",
 )
 
 axes[1].plot(
@@ -514,7 +515,6 @@ animation = animate_robots(
     trail_length=150,
     show_trails=True,
     show_angular_velocity=True,
-    show_propulsion_point=True,
 )
 
 plt.show()
