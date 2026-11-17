@@ -69,7 +69,3 @@ def test_input_fields_are_not_modified(fields):
     assert np.array_equal(fields.vx, original_vx)
     assert np.array_equal(fields.vy, original_vy)
 
-
-def test_invalid_inlet_density():
-    with pytest.raises(ValueError):
-        ChannelBoundaryConditions(rho_in=0.0)

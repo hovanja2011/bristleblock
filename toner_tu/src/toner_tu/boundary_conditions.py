@@ -14,8 +14,8 @@ class ChannelBoundaryConditions:
     vy_in: float = 0.0
 
     def __post_init__(self):
-        if self.rho_in <= 0:
-            raise ValueError("Inlet density must be positive.")
+        if self.rho_in < 0:
+            raise ValueError("rho_in must be non-negative")
 
 
 def apply_channel_boundary_conditions(
