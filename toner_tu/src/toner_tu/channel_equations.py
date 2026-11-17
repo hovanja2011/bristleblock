@@ -1,17 +1,12 @@
-
 from toner_tu.fields import Fields, Grid
 from toner_tu.parameters import TonerTuParameters
+from toner_tu.boundary_conditions import ChannelBoundaryConditions
 
 from toner_tu.channel_operators import (
     gradient,
-    divergence,
     laplacian,
-    advective_derivative,
-)
-
-from toner_tu.boundary_conditions import (
-    ChannelBoundaryConditions,
-    apply_channel_boundary_conditions,
+    advective_derivative_upwind,
+    compute_density_rhs,
 )
 
 
@@ -21,11 +16,7 @@ def compute_channel_rhs(
     params: TonerTuParameters,
     boundary: ChannelBoundaryConditions,
 ) -> Fields:
-    """
-    Compute the Toner-Tu right-hand side in an open channel.
-
-    Boundary conditions are applied before calculating derivatives.
-    """
+    """Compute the Toner-Tu right-hand side in an open channel."""
 
     expected_shape = (grid.ny, grid.nx)
 
@@ -35,37 +26,30 @@ def compute_channel_rhs(
             f"got {fields.rho.shape}."
         )
 
-    # Work with a state satisfying the prescribed boundary values.
-    state = apply_channel_boundary_conditions(fields, boundary)
+    rho = fields.rho
+    vx = fields.vx
+    vy = fields.vy
 
-    rho = state.rho
-    vx = state.vx
-    vy = state.vy
-
-    # Density equation:
-    # d rho / dt = - div(rho * v)
-
-    drho_dt = -divergence(
-        rho * vx,
-        rho * vy,
-        grid,
+    # Conservative density transport.
+    drho_dt = compute_density_rhs(
+        rho, vx, vy, grid, boundary
     )
 
-    # Velocity equation:
-    # dv/dt = -lambda (v · grad)v
-    #         + (alpha - beta |v|²)v
-    #         - sigma grad(rho)
-    #         + D laplacian(v)
+    # Advective derivative.
+    adv_vx, adv_vy = advective_derivative_upwind(
+        vx, vy, grid, boundary
+    )
 
-    adv_vx, adv_vy = advective_derivative(vx, vy, grid)
+    # Density gradient.
+    grad_rho_x, grad_rho_y = gradient(
+        rho, grid, boundary, "rho"
+    )
 
-    grad_rho_x, grad_rho_y = gradient(rho, grid)
-
-    lap_vx = laplacian(vx, grid)
-    lap_vy = laplacian(vy, grid)
+    # Velocity Laplacians.
+    lap_vx = laplacian(vx, grid, boundary, "vx")
+    lap_vy = laplacian(vy, grid, boundary, "vy")
 
     speed_squared = vx**2 + vy**2
-
     local_growth = params.alpha - params.beta * speed_squared
 
     dvx_dt = (

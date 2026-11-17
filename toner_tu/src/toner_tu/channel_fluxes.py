@@ -59,7 +59,7 @@ def compute_y_face_velocities(vy):
     return v
 
 
-def compute_upwind_fluxes(rho, vx, vy, grid):
+def compute_upwind_fluxes(rho, vx, vy, grid, boundary):
     """
     Compute conservative upwind mass fluxes at cell faces.
 
@@ -87,14 +87,17 @@ def compute_upwind_fluxes(rho, vx, vy, grid):
         + np.minimum(u_internal, 0.0) * rho[:, 1:]
     )
 
-    # Left boundary:
-    # positive velocity would bring particles from outside.
-    # Exterior density is zero, so only outward flux is possible.
-    flux_x[:, 0] = np.minimum(u[:, 0], 0.0) * rho[:, 0]
+    # Left boundary: prescribed inlet density.
+    u_left = u[:, 0]
 
-    # Right boundary:
-    # only positive velocity transports particles out of the domain.
-    flux_x[:, -1] = np.maximum(u[:, -1], 0.0) * rho[:, -1]
+    flux_x[:, 0] = np.where(
+        u_left >= 0.0,
+        u_left * boundary.rho_in,
+        u_left * rho[:, 0],
+    )
+
+    # Right boundary: zero-gradient outlet.
+    flux_x[:, -1] = u[:, -1] * rho[:, -1]
 
     # Internal horizontal faces.
     v_internal = v[1:-1, :]
@@ -109,7 +112,7 @@ def compute_upwind_fluxes(rho, vx, vy, grid):
     return flux_x, flux_y
 
 
-def compute_density_rhs(rho, vx, vy, grid):
+def compute_density_rhs(rho, vx, vy, grid, boundary):
     """
     Conservative finite-volume approximation of
 
@@ -119,7 +122,7 @@ def compute_density_rhs(rho, vx, vy, grid):
     """
 
     flux_x, flux_y = compute_upwind_fluxes(
-        rho, vx, vy, grid
+        rho, vx, vy, grid, boundary
     )
 
     divergence = (

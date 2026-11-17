@@ -27,11 +27,20 @@ class Grid:
     def dy(self) -> float:
         return self.ly / self.ny
 
-    def coordinates(self) -> tuple[npt.NDArray, npt.NDArray]:
-        x = np.arange(self.nx) * self.dx
-        y = np.arange(self.ny) * self.dy
+    def coordinates(
+        self,
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        x = (np.arange(self.nx) + 0.5) * self.dx
+        y = (np.arange(self.ny) + 0.5) * self.dy
         return np.meshgrid(x, y)
 
+    @property
+    def x(self) -> npt.NDArray[np.float64]:
+        return self.coordinates()[0]
+
+    @property
+    def y(self) -> npt.NDArray[np.float64]:
+        return self.coordinates()[1]
 
 @dataclass
 class Fields:

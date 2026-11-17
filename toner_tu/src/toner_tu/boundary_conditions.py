@@ -58,3 +58,59 @@ def apply_channel_boundary_conditions(
     result.vy[-1, :] = 0.0
 
     return result
+
+
+def add_ghost_cells(
+    field: np.ndarray,
+    boundary: ChannelBoundaryConditions,
+    field_name: str,
+) -> np.ndarray:
+    """
+    Extend a cell-centered field with one ghost cell on each side.
+    """
+
+    if field.ndim != 2:
+        raise ValueError("Field must be two-dimensional.")
+
+    ny, nx = field.shape
+
+    if ny < 2 or nx < 2:
+        raise ValueError("Field must have at least 2 cells per axis.")
+
+    result = np.empty((ny + 2, nx + 2), dtype=np.float64)
+
+    # Copy physical cells.
+    result[1:-1, 1:-1] = field
+
+    # Left boundary: inlet.
+    if field_name == "rho":
+        inlet_value = boundary.rho_in
+    elif field_name == "vx":
+        inlet_value = boundary.vx_in
+    elif field_name == "vy":
+        inlet_value = boundary.vy_in
+    else:
+        raise ValueError(f"Unknown field: {field_name}")
+
+    result[1:-1, 0] = 2.0 * inlet_value - field[:, 0]
+
+    # Right boundary: zero normal gradient.
+    result[1:-1, -1] = field[:, -1]
+
+    # Bottom boundary: free-slip / no penetration.
+    result[0, 1:-1] = field[0, :]
+    if field_name == "vy":
+        result[0, 1:-1] = -field[0, :]
+
+    # Top boundary: free-slip / no penetration.
+    result[-1, 1:-1] = field[-1, :]
+    if field_name == "vy":
+        result[-1, 1:-1] = -field[-1, :]
+
+    # Corners: wall condition has priority.
+    result[0, 0] = result[0, 1]
+    result[0, -1] = result[0, -2]
+    result[-1, 0] = result[-1, 1]
+    result[-1, -1] = result[-1, -2]
+
+    return result
