@@ -214,3 +214,26 @@ def test_right_boundary_does_not_allow_external_inflow(grid):
     )
 
     assert np.allclose(flux_x[:, -1], 0.0)
+
+def test_forward_euler_density_step_preserves_nonnegative_density(
+    grid,
+):
+    boundary = ChannelBoundaryConditions(
+        rho_in=1.0,
+        vx_in=1.0,
+        vy_in=0.0,
+    )
+
+    rng = np.random.default_rng(42)
+
+    rho = rng.uniform(0.0, 1.0, size=(grid.ny, grid.nx))
+    vx = rng.uniform(-2.0, 2.0, size=rho.shape)
+    vy = rng.uniform(-2.0, 2.0, size=rho.shape)
+
+    rate = density_cfl_rate(vx, vy, grid, boundary)
+    dt = 0.9 / rate
+
+    rhs = compute_density_rhs(rho, vx, vy, grid, boundary)
+    rho_next = rho + dt * rhs
+
+    assert np.all(rho_next >= -1e-14)

@@ -1,7 +1,7 @@
 from toner_tu.channel_fluxes import compute_density_rhs
 from toner_tu.fields import Fields, Grid
 from toner_tu.parameters import TonerTuParameters
-from toner_tu.boundary_conditions import ChannelBoundaryConditions
+from toner_tu.boundary_conditions import ChannelBoundaryConditions, add_ghost_cells
 
 from toner_tu.channel_operators import (
     gradient,
@@ -35,9 +35,17 @@ def compute_channel_rhs(
         rho, vx, vy, grid, boundary
     )
 
+    vx_extended = add_ghost_cells(vx, boundary, "vx")
+    vy_extended = add_ghost_cells(vy, boundary, "vy")
+
     # Advective derivative.
     adv_vx, adv_vy = advective_derivative_upwind(
-        vx, vy, grid, boundary
+        vx,
+        vy,
+        grid,
+        boundary,
+        vx_extended=vx_extended,
+        vy_extended=vy_extended,
     )
 
     # Density gradient.
@@ -46,8 +54,8 @@ def compute_channel_rhs(
     )
 
     # Velocity Laplacians.
-    lap_vx = laplacian(vx, grid, boundary, "vx")
-    lap_vy = laplacian(vy, grid, boundary, "vy")
+    lap_vx = laplacian(vx, grid, boundary, "vx", extended=vx_extended)
+    lap_vy = laplacian(vy, grid, boundary, "vy", extended=vy_extended)
 
     speed_squared = vx**2 + vy**2
     local_growth = params.alpha - params.beta * speed_squared

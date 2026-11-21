@@ -15,11 +15,11 @@ class Channel:
 
     @property
     def x(self) -> npt.NDArray:
-        return np.arange(self.grid.nx) * self.grid.dx
+        return (np.arange(self.grid.nx) + 0.5) * self.grid.dx
 
     @property
     def y(self) -> npt.NDArray:
-        return np.arange(self.grid.ny) * self.grid.dy
+        return (np.arange(self.grid.ny) + 0.5) * self.grid.dy
 
     def coordinates(self):
         return np.meshgrid(self.x, self.y)

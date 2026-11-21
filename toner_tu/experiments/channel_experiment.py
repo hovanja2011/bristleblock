@@ -41,7 +41,7 @@ def finite_swarm_initial_condition(
 
     rng = np.random.default_rng(seed)
 
-    x = np.arange(grid.nx) * grid.dx
+    x = (np.arange(grid.nx) + 0.5) * grid.dx
 
     # The initial swarm occupies only the left part of the channel.
     inside = (x > 0) & (x <= initial_length)
@@ -112,9 +112,8 @@ def run_experiment():
         ly=12.0,
     )
 
-    x = np.arange(grid.nx) * grid.dx
-    y = np.arange(grid.ny) * grid.dy
-
+    x = (np.arange(grid.nx) + 0.5) * grid.dx
+    y = (np.arange(grid.ny) + 0.5) * grid.dy
     # --------------------------------------------------
     # 2. Toner-Tu parameters
     # --------------------------------------------------

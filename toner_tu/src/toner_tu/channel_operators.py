@@ -40,16 +40,18 @@ def gradient(
 
     return dfdx, dfdy
 
-
 def laplacian(
     field: Array,
     grid: Grid,
     boundary: ChannelBoundaryConditions,
     field_name: str,
+    extended: Array | None = None,
 ) -> Array:
     _check_shape(field, grid)
 
-    extended = add_ghost_cells(field, boundary, field_name)
+    if extended is None:
+        extended = add_ghost_cells(field, boundary, field_name)
+
     center = extended[1:-1, 1:-1]
 
     d2fdx2 = (
@@ -85,55 +87,74 @@ def advective_derivative(
     return adv_vx, adv_vy
 
 
+
 def advective_derivative_upwind(
     vx: Array,
     vy: Array,
     grid: Grid,
     boundary: ChannelBoundaryConditions,
+    vx_extended: Array | None = None,
+    vy_extended: Array | None = None,
 ) -> tuple[Array, Array]:
     """Compute the advective derivative using first-order upwind differences."""
 
     _check_shape(vx, grid)
     _check_shape(vy, grid)
 
-    vx_ext = add_ghost_cells(vx, boundary, "vx")
-    vy_ext = add_ghost_cells(vy, boundary, "vy")
+    if vx_extended is None:
+        vx_extended = add_ghost_cells(vx, boundary, "vx")
 
-    # Neighbouring values in the x direction.
+    if vy_extended is None:
+        vy_extended = add_ghost_cells(vy, boundary, "vy")
+
+    vx_ext = vx_extended
+    vy_ext = vy_extended
+
     vx_left = vx_ext[1:-1, :-2]
     vx_right = vx_ext[1:-1, 2:]
     vy_left = vy_ext[1:-1, :-2]
     vy_right = vy_ext[1:-1, 2:]
 
-    # Neighbouring values in the y direction.
     vx_bottom = vx_ext[:-2, 1:-1]
     vx_top = vx_ext[2:, 1:-1]
     vy_bottom = vy_ext[:-2, 1:-1]
     vy_top = vy_ext[2:, 1:-1]
 
-    # Upwind derivatives in x.
-    dvx_dx = np.where(
-        vx >= 0.0,
-        (vx - vx_left) / grid.dx,
-        (vx_right - vx) / grid.dx,
-    )
-    dvy_dx = np.where(
-        vx >= 0.0,
-        (vy - vy_left) / grid.dx,
-        (vy_right - vy) / grid.dx,
-    )
+    dvx_dx = np.empty_like(vx)
+    dvy_dx = np.empty_like(vy)
+    dvx_dy = np.empty_like(vx)
+    dvy_dy = np.empty_like(vy)
+    temporary = np.empty_like(vx)
 
-    # Upwind derivatives in y.
-    dvx_dy = np.where(
-        vy >= 0.0,
-        (vx - vx_bottom) / grid.dy,
-        (vx_top - vx) / grid.dy,
-    )
-    dvy_dy = np.where(
-        vy >= 0.0,
-        (vy - vy_bottom) / grid.dy,
-        (vy_top - vy) / grid.dy,
-    )
+    # X derivatives.
+    np.subtract(vx, vx_left, out=dvx_dx)
+    np.divide(dvx_dx, grid.dx, out=dvx_dx)
+
+    np.subtract(vx_right, vx, out=temporary)
+    np.divide(temporary, grid.dx, out=temporary)
+    np.copyto(dvx_dx, temporary, where=(vx < 0.0))
+
+    np.subtract(vy, vy_left, out=dvy_dx)
+    np.divide(dvy_dx, grid.dx, out=dvy_dx)
+
+    np.subtract(vy_right, vy, out=temporary)
+    np.divide(temporary, grid.dx, out=temporary)
+    np.copyto(dvy_dx, temporary, where=(vx < 0.0))
+
+    # Y derivatives.
+    np.subtract(vx, vx_bottom, out=dvx_dy)
+    np.divide(dvx_dy, grid.dy, out=dvx_dy)
+
+    np.subtract(vx_top, vx, out=temporary)
+    np.divide(temporary, grid.dy, out=temporary)
+    np.copyto(dvx_dy, temporary, where=(vy < 0.0))
+
+    np.subtract(vy, vy_bottom, out=dvy_dy)
+    np.divide(dvy_dy, grid.dy, out=dvy_dy)
+
+    np.subtract(vy_top, vy, out=temporary)
+    np.divide(temporary, grid.dy, out=temporary)
+    np.copyto(dvy_dy, temporary, where=(vy < 0.0))
 
     adv_vx = vx * dvx_dx + vy * dvx_dy
     adv_vy = vx * dvy_dx + vy * dvy_dy

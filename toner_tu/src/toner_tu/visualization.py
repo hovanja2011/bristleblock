@@ -104,7 +104,12 @@ def animate_fields(
     image = ax.imshow(
         rho_history[0],
         origin="lower",
-        extent=[0, grid.lx, 0, grid.ly],
+        extent=[
+            -grid.dx / 2,
+            grid.lx - grid.dx / 2,
+            -grid.dy / 2,
+            grid.ly - grid.dy / 2,
+        ],
         cmap="viridis",
         vmin=np.min(rho_history),
         vmax=np.max(rho_history),

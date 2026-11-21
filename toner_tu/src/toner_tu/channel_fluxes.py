@@ -146,20 +146,20 @@ def compute_density_rhs(rho, vx, vy, grid, boundary):
 
     return -divergence
 
-
 def density_cfl_rate(vx, vy, grid, boundary):
     """
     Return the maximum outgoing mass-flux rate per cell.
 
-    The left boundary velocity is prescribed by boundary.vx_in.
-    Incoming flux at the right boundary does not contribute to
-    the outgoing rate because the exterior density is zero.
+    This rate gives the forward-Euler positivity condition:
+        dt * rate <= 1.
+
+    The prescribed left boundary velocity is used.
+    External inflow at the right boundary has zero density.
     """
 
     u = compute_x_face_velocities(vx)
     v = compute_y_face_velocities(vy)
 
-    # The left boundary velocity must match compute_upwind_fluxes().
     u[:, 0] = boundary.vx_in
 
     outgoing_x = (
@@ -172,4 +172,6 @@ def density_cfl_rate(vx, vy, grid, boundary):
         + np.maximum(-v[:-1, :], 0.0)
     ) / grid.dy
 
-    return float(np.max(outgoing_x + outgoing_y))
+    outgoing_rate = outgoing_x + outgoing_y
+
+    return float(np.max(outgoing_rate))

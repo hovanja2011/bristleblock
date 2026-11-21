@@ -2,6 +2,7 @@
 import numpy as np
 import pytest
 
+from toner_tu.channel_fluxes import compute_density_rhs
 from toner_tu.fields import Fields, Grid
 from toner_tu.parameters import TonerTuParameters
 from toner_tu.boundary_conditions import ChannelBoundaryConditions
@@ -102,3 +103,51 @@ def test_input_fields_are_not_modified(grid, params, boundary):
     assert np.array_equal(fields.rho, original_rho)
     assert np.array_equal(fields.vx, original_vx)
     assert np.array_equal(fields.vy, original_vy)
+
+
+@pytest.mark.parametrize(
+    "vx_value, inlet_velocity",
+    [
+        (0.4, 0.4),    # Forward flow
+        (-0.4, -0.4),  # Reverse flow
+    ],
+)
+def test_production_rhs_uses_canonical_density_fluxes(
+    grid, params, vx_value, inlet_velocity
+):
+    rng = np.random.default_rng(42)
+    shape = (grid.ny, grid.nx)
+
+    fields = Fields(
+        rho=rng.uniform(0.5, 1.5, shape),
+        vx=np.full(shape, vx_value),
+        vy=rng.uniform(-0.1, 0.1, shape),
+    )
+
+    boundary = ChannelBoundaryConditions(
+        rho_in=1.4,
+        vx_in=inlet_velocity,
+        vy_in=0.0,
+    )
+
+    expected = compute_density_rhs(
+        fields.rho,
+        fields.vx,
+        fields.vy,
+        grid,
+        boundary,
+    )
+
+    production_rhs = compute_channel_rhs(
+        fields,
+        grid,
+        params,
+        boundary,
+    )
+
+    assert np.allclose(
+        production_rhs.rho,
+        expected,
+        rtol=1e-13,
+        atol=1e-13,
+    )

@@ -13,17 +13,43 @@ REACTION_SAFETY = 0.9
 class _TimeStepViolation(ValueError):
     """Raised when a time step violates a numerical stability bound."""
 
-def _check_max_stable_dt(fields, grid, params, boundary, dt):
-    density_rate = density_cfl_rate(fields.vx, fields.vy, grid, boundary)
+def _validate_state(
+    fields: Fields,
+    grid: Grid,
+    stage: str,
+) -> None:
+    """Reject invalid numerical states without modifying them."""
 
-    if density_rate > 0.0:
-        density_max_dt = DENSITY_CFL_SAFETY / density_rate
+    expected_shape = (grid.ny, grid.nx)
 
-        if dt > density_max_dt:
-            raise _TimeStepViolation(
-                f"Density CFL condition violated: "
-                f"dt={dt:.6g}, max_dt={density_max_dt:.6g}"
+    for name, values in (
+        ("rho", fields.rho),
+        ("vx", fields.vx),
+        ("vy", fields.vy),
+    ):
+        if values.shape != expected_shape:
+            raise ValueError(
+                f"{stage}: {name} has an incorrect shape."
             )
+
+        if not np.all(np.isfinite(values)):
+            raise ValueError(
+                f"{stage}: {name} contains NaN or Inf."
+            )
+
+    if np.any(fields.rho < 0.0):
+        raise ValueError(
+            f"{stage}: density became negative."
+        )
+
+def _check_max_stable_dt(fields, grid, params, boundary, dt):
+    max_dt = max_stable_dt(fields, grid, params, boundary)
+
+    if dt > max_dt:
+        raise _TimeStepViolation(
+            f"Time-step stability condition violated: "
+            f"dt={dt:.6g}, max_dt={max_dt:.6g}"
+        )
 
     max_dt = max_stable_dt(fields, grid, params, boundary)
 
@@ -55,10 +81,11 @@ def step(
 ) -> Fields:
     """Advance the channel fields by one SSP-RK2 time step."""
 
-    if dt <= 0:
-        raise ValueError("dt must be positive.")
+    if not np.isfinite(dt) or dt <= 0:
+        raise ValueError("dt must be finite and positive.")
 
     state_0 = fields.copy()
+    _validate_state(state_0, grid, "Initial state")
 
     # First forward-Euler stage.
     _check_max_stable_dt(state_0, grid, params, boundary, dt)
@@ -72,6 +99,7 @@ def step(
         vx=state_0.vx + dt * rhs_0.vx,
         vy=state_0.vy + dt * rhs_0.vy,
     )
+    _validate_state(stage_1, grid, "First RK stage")
 
     # The velocity field has changed, so check CFL again.\
     _check_max_stable_dt(stage_1, grid, params, boundary, dt)
@@ -86,13 +114,18 @@ def step(
         vx=stage_1.vx + dt * rhs_1.vx,
         vy=stage_1.vy + dt * rhs_1.vy,
     )
+    _validate_state(euler_2, grid, "Second RK stage")
 
-    return _combine(
+    result = _combine(
         state_0,
         euler_2,
         weight_a=0.5,
         weight_b=0.5,
     )
+
+    _validate_state(result, grid, "Final RK state")
+
+    return result
 
 
 def integrate(
@@ -103,15 +136,16 @@ def integrate(
     dt: float,
     n_steps: int,
 ) -> Fields:
-    """Integrate using adaptive substeps controlled by the density CFL bound."""
+    """Integrate using adaptive substeps controlled by stability bounds."""
 
-    if dt <= 0:
-        raise ValueError("dt must be positive.")
+    if not np.isfinite(dt) or dt <= 0:
+        raise ValueError("dt must be finite and positive.")
 
     if not isinstance(n_steps, int) or n_steps < 0:
         raise ValueError("n_steps must be a non-negative integer.")
 
     current = fields.copy()
+    _validate_state(current, grid, "Initial integration state")
 
     for _ in range(n_steps):
         elapsed = 0.0

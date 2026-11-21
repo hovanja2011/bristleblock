@@ -39,6 +39,11 @@ def calculate_diagnostics(times, rho, vx, vy, dx, dy):
 
     cell_area = dx * dy
 
+    ny, nx = rho.shape[1:]
+    x_grid = (np.arange(nx) + 0.5) * dx
+    y_grid = (np.arange(ny) + 0.5) * dy
+    X, Y = np.meshgrid(x_grid, y_grid)
+
     for i in range(n_frames):
         r = rho[i]
         ux = vx[i]
@@ -105,7 +110,12 @@ def plot_snapshots(times, rho, vx, vy, x, y):
         image = ax.imshow(
             rho[i],
             origin="lower",
-            extent=[x[0], x[-1], y[0], y[-1]],
+            extent=[
+                x[0] - (x[1] - x[0]) / 2,
+                x[-1] + (x[1] - x[0]) / 2,
+                y[0] - (y[1] - y[0]) / 2,
+                y[-1] + (y[1] - y[0]) / 2,
+            ],
             aspect="auto",
             cmap="viridis",
         )

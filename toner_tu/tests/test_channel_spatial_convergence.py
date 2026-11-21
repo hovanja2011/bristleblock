@@ -1,9 +1,33 @@
+
 import numpy as np
 
 from toner_tu.fields import Fields, Grid
 from toner_tu.parameters import TonerTuParameters
 from toner_tu.boundary_conditions import ChannelBoundaryConditions
 from toner_tu.channel_solver import integrate
+
+
+def restrict_by_averaging(field):
+    """Average each 2x2 block of fine cells onto the coarse grid."""
+    ny, nx = field.shape
+
+    if ny % 2 != 0 or nx % 2 != 0:
+        raise ValueError("Field dimensions must be divisible by 2.")
+
+    return field.reshape(
+        ny // 2, 2, nx // 2, 2
+    ).mean(axis=(1, 3))
+
+
+def l2_error(a, b):
+    return float(np.sqrt(np.mean((a - b) ** 2)))
+
+
+def observed_order(error_coarse, error_fine):
+    if error_coarse <= 0.0 or error_fine <= 0.0:
+        raise ValueError("Errors must be positive.")
+
+    return float(np.log2(error_coarse / error_fine))
 
 
 def test_channel_solver_spatial_convergence():
@@ -51,26 +75,39 @@ def test_channel_solver_spatial_convergence():
             round(final_time / dt),
         )
 
-        solutions.append((grid, result))
+        solutions.append(result)
 
-    coarse_grid, coarse = solutions[0]
-    medium_grid, medium = solutions[1]
-    fine_grid, fine = solutions[2]
+    coarse, medium, fine = solutions
 
-    def restrict(field):
-        return field[::2, ::2]
+    field_names = ("rho", "vx", "vy")
 
-    def error(a, b):
-        return np.sqrt(np.mean((a - b) ** 2))
+    for field_name in field_names:
+        coarse_field = getattr(coarse, field_name)
+        medium_field = getattr(medium, field_name)
+        fine_field = getattr(fine, field_name)
 
-    rho_error_coarse = error(
-        coarse.rho,
-        restrict(medium.rho),
-    )
+        # Align cell centers by averaging 2x2 fine-cell blocks.
+        medium_on_coarse = restrict_by_averaging(medium_field)
+        fine_on_medium = restrict_by_averaging(fine_field)
 
-    rho_error_fine = error(
-        medium.rho,
-        restrict(fine.rho),
-    )
+        error_coarse = l2_error(
+            coarse_field,
+            medium_on_coarse,
+        )
 
-    assert rho_error_coarse > rho_error_fine
+        error_fine = l2_error(
+            medium_field,
+            fine_on_medium,
+        )
+
+        order = observed_order(error_coarse, error_fine)
+
+        assert np.isfinite(order)
+        assert error_fine < error_coarse, (
+            f"{field_name}: spatial error did not decrease "
+            f"under refinement: "
+            f"coarse error={error_coarse}, "
+            f"fine error={error_fine}, "
+            f"observed order={order}"
+        )
+        assert order > 0.0
