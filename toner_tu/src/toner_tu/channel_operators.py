@@ -41,58 +41,6 @@ def gradient(
     return dfdx, dfdy
 
 
-def compute_density_rhs(
-    rho: Array,
-    vx: Array,
-    vy: Array,
-    grid: Grid,
-    boundary: ChannelBoundaryConditions,
-) -> Array:
-    """Compute conservative density transport using upwind face fluxes."""
-
-    _check_shape(rho, grid)
-    _check_shape(vx, grid)
-    _check_shape(vy, grid)
-
-    ny, nx = rho.shape
-
-    # Face fluxes in the x direction.
-    flux_x = np.zeros((ny, nx + 1), dtype=np.float64)
-
-    # Inlet: prescribed density and velocity.
-    flux_x[:, 0] = boundary.rho_in * boundary.vx_in
-
-    # Internal faces: first-order upwind flux.
-    vx_face = 0.5 * (vx[:, :-1] + vx[:, 1:])
-    rho_upwind_x = np.where(
-        vx_face >= 0.0,
-        rho[:, :-1],
-        rho[:, 1:],
-    )
-    flux_x[:, 1:-1] = vx_face * rho_upwind_x
-
-    # Outlet: zero-gradient extrapolation.
-    flux_x[:, -1] = rho[:, -1] * vx[:, -1]
-
-    # Face fluxes in the y direction.
-    flux_y = np.zeros((ny + 1, nx), dtype=np.float64)
-
-    # Impermeable top and bottom walls: zero normal flux.
-    vy_face = 0.5 * (vy[:-1, :] + vy[1:, :])
-    rho_upwind_y = np.where(
-        vy_face >= 0.0,
-        rho[:-1, :],
-        rho[1:, :],
-    )
-    flux_y[1:-1, :] = vy_face * rho_upwind_y
-
-    # Conservative finite-volume update.
-    return (
-        -(flux_x[:, 1:] - flux_x[:, :-1]) / grid.dx
-        -(flux_y[1:, :] - flux_y[:-1, :]) / grid.dy
-    )
-
-
 def laplacian(
     field: Array,
     grid: Grid,

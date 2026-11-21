@@ -1,3 +1,4 @@
+from toner_tu.channel_fluxes import compute_density_rhs
 from toner_tu.fields import Fields, Grid
 from toner_tu.parameters import TonerTuParameters
 from toner_tu.boundary_conditions import ChannelBoundaryConditions
@@ -6,7 +7,6 @@ from toner_tu.channel_operators import (
     gradient,
     laplacian,
     advective_derivative_upwind,
-    compute_density_rhs,
 )
 
 

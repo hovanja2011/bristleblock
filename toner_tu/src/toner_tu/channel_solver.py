@@ -13,49 +13,8 @@ REACTION_SAFETY = 0.9
 class _TimeStepViolation(ValueError):
     """Raised when a time step violates a numerical stability bound."""
 
-def _check_density_cfl(
-    fields: Fields,
-    grid: Grid,
-    dt: float,
-) -> None:
-    rate = density_cfl_rate(
-        fields.vx,
-        fields.vy,
-        grid,
-    )
-
-    if rate == 0.0:
-        return
-
-    max_dt = DENSITY_CFL_SAFETY / rate
-
-    if dt > max_dt * (1.0 + 1e-12):
-        raise _TimeStepViolation(
-            f"Density CFL condition violated: "
-            f"dt={dt:.6g}, maximum allowed dt={max_dt:.6g}."
-        )
-
-def _check_velocity_cfl(
-    fields: Fields,
-    grid: Grid,
-    params: TonerTuParameters,
-    dt: float,
-) -> None:
-    rate = velocity_cfl_rate(fields, grid, params)
-
-    if rate == 0.0:
-        return
-
-    max_dt = DENSITY_CFL_SAFETY / rate
-
-    if dt > max_dt * (1.0 + 1e-12):
-        raise _TimeStepViolation(
-            f"Velocity CFL condition violated: "
-            f"dt={dt:.6g}, maximum allowed dt={max_dt:.6g}."
-        )
-
-def _check_max_stable_dt(fields, grid, params, dt):
-    density_rate = density_cfl_rate(fields.vx, fields.vy, grid)
+def _check_max_stable_dt(fields, grid, params, boundary, dt):
+    density_rate = density_cfl_rate(fields.vx, fields.vy, grid, boundary)
 
     if density_rate > 0.0:
         density_max_dt = DENSITY_CFL_SAFETY / density_rate
@@ -66,7 +25,7 @@ def _check_max_stable_dt(fields, grid, params, dt):
                 f"dt={dt:.6g}, max_dt={density_max_dt:.6g}"
             )
 
-    max_dt = max_stable_dt(fields, grid, params)
+    max_dt = max_stable_dt(fields, grid, params, boundary)
 
     if dt > max_dt:
         raise _TimeStepViolation(
@@ -102,7 +61,7 @@ def step(
     state_0 = fields.copy()
 
     # First forward-Euler stage.
-    _check_max_stable_dt(state_0, grid, params, dt)
+    _check_max_stable_dt(state_0, grid, params, boundary, dt)
 
     rhs_0 = compute_channel_rhs(
         state_0, grid, params, boundary
@@ -115,7 +74,7 @@ def step(
     )
 
     # The velocity field has changed, so check CFL again.\
-    _check_max_stable_dt(stage_1, grid, params, dt)
+    _check_max_stable_dt(stage_1, grid, params, boundary, dt)
 
     rhs_1 = compute_channel_rhs(
         stage_1, grid, params, boundary
@@ -160,7 +119,7 @@ def integrate(
         while elapsed < dt:
             remaining = dt - elapsed
 
-            max_dt = max_stable_dt(current, grid, params)
+            max_dt = max_stable_dt(current, grid, params, boundary,)
             trial_dt = min(remaining, max_dt)
 
             # If the second RK stage violates CFL, retry with a
@@ -232,11 +191,12 @@ def velocity_cfl_rate(
 
     return float(advection_rate + diffusion_rate)
 
-def max_stable_dt(fields, grid, params):
+def max_stable_dt(fields, grid, params, boundary):
     density_rate = density_cfl_rate(
         fields.vx,
         fields.vy,
         grid,
+        boundary,
     )
     velocity_rate = velocity_cfl_rate(
         fields,

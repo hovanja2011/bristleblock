@@ -63,8 +63,13 @@ def compute_upwind_fluxes(rho, vx, vy, grid, boundary):
     """
     Compute conservative upwind mass fluxes at cell faces.
 
-    Left and right boundaries are open with zero exterior density:
-    particles may leave, but no particles enter from outside.
+    Left boundary:
+        Prescribed inlet velocity and density for inflow.
+        Interior density is used for outflow.
+
+    Right boundary:
+        Interior density is used for outflow.
+        Inflow from outside is zero (vacuum).
 
     Top and bottom boundaries are impermeable.
     """
@@ -87,8 +92,9 @@ def compute_upwind_fluxes(rho, vx, vy, grid, boundary):
         + np.minimum(u_internal, 0.0) * rho[:, 1:]
     )
 
-    # Left boundary: prescribed inlet density.
-    u_left = u[:, 0]
+    # Left boundary.
+    # Use the prescribed boundary velocity, not vx[:, 0].
+    u_left = boundary.vx_in
 
     flux_x[:, 0] = np.where(
         u_left >= 0.0,
@@ -96,8 +102,15 @@ def compute_upwind_fluxes(rho, vx, vy, grid, boundary):
         u_left * rho[:, 0],
     )
 
-    # Right boundary: zero-gradient outlet.
-    flux_x[:, -1] = u[:, -1] * rho[:, -1]
+    # Right boundary.
+    # Outflow is allowed; external inflow has zero density.
+    u_right = u[:, -1]
+
+    flux_x[:, -1] = np.where(
+        u_right >= 0.0,
+        u_right * rho[:, -1],
+        0.0,
+    )
 
     # Internal horizontal faces.
     v_internal = v[1:-1, :]
@@ -110,6 +123,7 @@ def compute_upwind_fluxes(rho, vx, vy, grid, boundary):
     # Top and bottom fluxes remain zero.
 
     return flux_x, flux_y
+
 
 
 def compute_density_rhs(rho, vx, vy, grid, boundary):
@@ -133,17 +147,20 @@ def compute_density_rhs(rho, vx, vy, grid, boundary):
     return -divergence
 
 
-def density_cfl_rate(vx, vy, grid):
+def density_cfl_rate(vx, vy, grid, boundary):
     """
     Return the maximum outgoing mass-flux rate per cell.
 
-    A sufficient positivity condition for forward Euler is:
-
-        dt * density_cfl_rate <= 1.
+    The left boundary velocity is prescribed by boundary.vx_in.
+    Incoming flux at the right boundary does not contribute to
+    the outgoing rate because the exterior density is zero.
     """
 
     u = compute_x_face_velocities(vx)
     v = compute_y_face_velocities(vy)
+
+    # The left boundary velocity must match compute_upwind_fluxes().
+    u[:, 0] = boundary.vx_in
 
     outgoing_x = (
         np.maximum(u[:, 1:], 0.0)

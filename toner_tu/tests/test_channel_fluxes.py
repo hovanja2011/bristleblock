@@ -100,15 +100,44 @@ def test_empty_region_stays_empty(grid, boundary):
     assert np.all(updated_rho >= -1e-12)
 
 
-def test_cfl_rate_is_positive(grid):
-    rho = np.ones((grid.ny, grid.nx))
-    vx = np.ones_like(rho)
-    vy = np.zeros_like(rho)
+def test_cfl_rate_is_positive(grid, boundary):
+    vx = np.ones((grid.ny, grid.nx))
+    vy = np.zeros_like(vx)
 
-    rate = density_cfl_rate(vx, vy, grid)
+    rate = density_cfl_rate(vx, vy, grid, boundary)
 
     assert rate > 0.0
     assert np.isfinite(rate)
+
+
+def test_cfl_rate_uses_prescribed_left_boundary_velocity(grid):
+    boundary = ChannelBoundaryConditions(
+        rho_in=1.0,
+        vx_in=-2.0,
+        vy_in=0.0,
+    )
+
+    vx = np.zeros((grid.ny, grid.nx))
+    vy = np.zeros_like(vx)
+
+    rate = density_cfl_rate(vx, vy, grid, boundary)
+
+    assert rate == pytest.approx(2.0 / grid.dx)
+
+
+def test_positive_left_boundary_velocity_is_not_outflow(grid):
+    boundary = ChannelBoundaryConditions(
+        rho_in=1.0,
+        vx_in=2.0,
+        vy_in=0.0,
+    )
+
+    vx = np.zeros((grid.ny, grid.nx))
+    vy = np.zeros_like(vx)
+
+    rate = density_cfl_rate(vx, vy, grid, boundary)
+
+    assert rate == pytest.approx(0.0)
 
 
 def test_negative_density_is_rejected(grid):
@@ -149,3 +178,39 @@ def test_density_rhs_is_conservative():
     ) * grid.dy
 
     assert np.isclose(mass_rate, boundary_rate)
+
+
+def test_left_boundary_uses_prescribed_velocity(grid):
+    boundary = ChannelBoundaryConditions(
+        rho_in=2.0,
+        vx_in=0.7,
+        vy_in=0.0,
+    )
+
+    rho = np.ones((grid.ny, grid.nx))
+    vx = np.zeros_like(rho)
+    vy = np.zeros_like(rho)
+
+    flux_x, _ = compute_upwind_fluxes(
+        rho, vx, vy, grid, boundary
+    )
+
+    assert np.allclose(flux_x[:, 0], 1.4)
+
+
+def test_right_boundary_does_not_allow_external_inflow(grid):
+    boundary = ChannelBoundaryConditions(
+        rho_in=1.0,
+        vx_in=0.0,
+        vy_in=0.0,
+    )
+
+    rho = np.ones((grid.ny, grid.nx))
+    vx = -np.ones_like(rho)
+    vy = np.zeros_like(rho)
+
+    flux_x, _ = compute_upwind_fluxes(
+        rho, vx, vy, grid, boundary
+    )
+
+    assert np.allclose(flux_x[:, -1], 0.0)

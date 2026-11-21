@@ -255,7 +255,7 @@ def test_reaction_rate_includes_radial_eigenvalue():
 
     assert channel_solver.reaction_rate(fields, params) == pytest.approx(2.0)
 
-def test_max_stable_dt_includes_reaction_limit(grid):
+def test_max_stable_dt_includes_reaction_limit(grid, boundary):
     fields = Fields(
         rho=np.ones((grid.ny, grid.nx)),
         vx=np.full((grid.ny, grid.nx), 0.5),
@@ -270,7 +270,7 @@ def test_max_stable_dt_includes_reaction_limit(grid):
         lambda_=1.0,
     )
 
-    result = channel_solver.max_stable_dt(fields, grid, params)
+    result = channel_solver.max_stable_dt(fields, grid, params, boundary)
 
     assert result <= channel_solver.reaction_max_dt(fields, params)
     assert result > 0.0
