@@ -1,6 +1,6 @@
 # Stage 2 — reproducible verification and visualization
 
-Status: the initial analytical benchmark pair passed CI. The expanded diagnostic suite and its new Toner–Tu tests are now included; the numerical experiments should be run locally before their numerical outputs are treated as verified.
+Status: the full validation suite passes in GitHub Actions. Run #22 executes all three test groups and all seven quantitative experiment scripts; the resulting CSV tables and PNG figures are also uploaded as the workflow artifact named validation-results.
 
 ## Keep three kinds of evidence separate
 
@@ -40,6 +40,22 @@ The damped acoustic experiment includes velocity diffusion. Reference amplitudes
 The nonlinear ordering experiment isolates the full cubic local term
 \(\dot v=(\alpha-\beta |v|^2)v\) in a spatially uniform state. The exact solution is logistic in \(|v|^2\). This is a nonlinear local-saturation benchmark, **not** a test of nonlinear spatial pattern formation, vortices or nonlinear transport.
 
+## Results from CI run #22
+
+The following are measured results from the reproducible run, not estimates:
+
+| Benchmark | Refinement result |
+|---|---|
+| Free translation | Position and velocity errors decrease by approximately 2 when dt is halved (first order). |
+| Active rotation | Angle and angular-velocity errors show order 1.00–1.02. |
+| Head-on damped collision | Overlap and position errors show order about 1.05–1.27; overlap-rate error is approximately first order. |
+| Oblique frictionless collision | Final-velocity error falls from \(7.95\\times10^{-5}\) to \(9.89\\times10^{-7}\) over an 8-fold dt reduction; total momentum and angular-momentum drifts remain near floating-point roundoff. |
+| Undamped acoustic mode | Spatial order 1.99–2.00. |
+| Damped acoustic mode | Spatial order 2.00. |
+| Nonlinear homogeneous ordering | Time order 2.97–3.05, consistent with SSP-RK3. |
+
+**Contact-overlap warning:** in the oblique-collision run, maximum overlap is approximately \(1.581\\times10^{-2}\), or 3.16% of the robot radius, at the chosen normal stiffness \(k_n=2000\). It remains nearly constant under dt refinement. This is expected: reducing dt controls temporal error but does not remove finite penalty deformation. A separate stiffness-refinement study is required before treating the compliant contact as a sufficiently accurate hard-disk approximation.
+
 ## Reproducibility and outputs
 
 From the repository root:
@@ -53,7 +69,8 @@ python experiments/run_validation_suite.py
 
 Use --no-show for headless runs. Results are written to results/validation:
 CSV error tables, PNG plots, and a combined summary.csv. Individual scripts
-accept --output-dir PATH and --no-show.
+accept --output-dir PATH and --no-show. GitHub Actions uploads the same output
+directory as the validation-results artifact after a successful run.
 
 The interactive animation is generated from sampled numerical states; the
 quantitative plots overlay the analytical solution or clearly identified
@@ -62,7 +79,7 @@ quantitative comparison.
 
 ## Limitations and interpretation
 
-- Translation, rotation and head-on normal-contact benchmarks compare with continuous analytical solutions; semi-implicit Euler should show first-order global convergence.
+- Translation, rotation and head-on normal-contact benchmarks compare with continuous analytical solutions; semi-implicit Euler shows first-order global convergence.
 - The oblique-collision benchmark uses the ideal elastic collision map as a final-state reference and separately monitors conserved quantities. It does not claim that finite penalty stiffness reproduces a hard-contact path exactly.
 - The Toner–Tu damped-mode benchmark checks a linearized Fourier mode with a small perturbation. The nonlinear benchmark checks only homogeneous cubic saturation.
 - Nonlinear spatial Toner–Tu regimes still need separate verification, ideally with manufactured solutions or a trusted independent high-resolution reference.

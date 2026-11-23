@@ -49,7 +49,10 @@ python experiments/run_validation_suite.py --no-show
 
 Generated results are written to results/validation/: per-experiment CSV
 tables, PNG plots, a combined summary.csv, and a short README describing the
-artifacts. Individual scripts can also be run separately:
+artifacts. A successful GitHub Actions run also publishes the folder as the
+validation-results artifact, available from the run's Artifacts section.
+
+Individual scripts can also be run separately:
 
 ~~~bash
 python bristlebots/experiments/free_motion_validation.py
@@ -62,7 +65,7 @@ python toner_tu/experiments/nonlinear_ordering_validation.py
 ~~~
 
 Interactive experiments open Matplotlib figures; the bristlebots rotation and
-collision experiments and the damped Toner–Tu mode also show animations.
+collision experiments and the Toner–Tu acoustic modes also show animations.
 Every script accepts --output-dir PATH and --no-show.
 
 The numerical curves are compared with analytical solutions or explicitly
