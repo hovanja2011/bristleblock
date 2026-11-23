@@ -101,6 +101,9 @@ def _density_flux_rhs(fields, grid, geometry, boundary):
     elif boundary.mode == "box":
         # Closed box: no mass flux through any outer wall.
         pass
+    elif boundary.mode == "box":
+        # Closed box walls: outer-face mass flux is zero.
+        pass
     else:
         fx[:, 0] = np.where(fluid[:, 0] & (boundary.vx_in >= 0),
                             boundary.vx_in * boundary.rho_in, 0.0)
@@ -124,7 +127,7 @@ def compute_rhs(fields, grid, params, geometry=None, boundary=None):
     rho, vx, vy = fields.rho, fields.vx, fields.vy
     drho = _density_flux_rhs(fields, grid, geometry, boundary)
     vx_x, vx_y, lap_vx = _derivatives(vx, grid, geometry, boundary.mode == "periodic")
-    vy_x, vy_y, lap_vy = _derivatives(vy, grid, geometry, boundary.periodic)
+    vy_x, vy_y, lap_vy = _derivatives(vy, grid, geometry, boundary.mode == "periodic")
     rho_x, rho_y, _ = _derivatives(rho, grid, geometry, boundary.periodic)
 
     adv_vx = vx * vx_x + vy * vx_y
