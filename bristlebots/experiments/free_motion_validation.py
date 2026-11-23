@@ -1,89 +1,53 @@
-"""Quantitative free-motion benchmark against the linear-drag solution.
-
-Run from the repository root:
-    python bristlebots/experiments/free_motion_validation.py
-
-The experiment reports max-in-time position/velocity errors and observed
-orders for a fixed physical setup while the time step is refined.
-"""
+"""Quantitative free translation benchmark against the linear-drag solution."""
+import argparse
+import csv
+from pathlib import Path
+import matplotlib.pyplot as plt
 import numpy as np
-
 from bristlebots.robot import Robot
 from bristlebots.simulation import step
 
+MASS,DRAG,FORCE=1.4,.6,.8
+X0=np.array([-.3,.2]); V0=np.array([.25,-.15]); FINAL_TIME=2.
 
-MASS = 1.4
-DRAG = 0.6
-PROPULSION_FORCE = 0.8
-INITIAL_POSITION = np.array([-0.3, 0.2])
-INITIAL_VELOCITY = np.array([0.25, -0.15])
-FINAL_TIME = 2.0
-
-
-def exact_state(time, x0, v0, force):
-    terminal_speed = force / DRAG
-    relaxation_time = MASS / DRAG
-    decay = np.exp(-time / relaxation_time)
-    velocity = terminal_speed + (v0 - terminal_speed) * decay
-    position = (
-        x0
-        + terminal_speed * time
-        + (v0 - terminal_speed) * relaxation_time * (1.0 - decay)
-    )
-    return position, velocity
-
+def exact_state(t,x0,v0,force):
+    terminal=force/DRAG; tau=MASS/DRAG; decay=np.exp(-t/tau)
+    return x0+terminal*t+(v0-terminal)*tau*(1-decay), terminal+(v0-terminal)*decay
 
 def run(dt):
-    robot = Robot(
-        position=INITIAL_POSITION,
-        velocity=INITIAL_VELOCITY,
-        theta=0.0,
-        radius=0.2,
-        mass=MASS,
-        propulsion_force=PROPULSION_FORCE,
-        translational_drag=DRAG,
-    )
-    n_steps = round(FINAL_TIME / dt)
-    position_errors = []
-    velocity_errors = []
-
-    for index in range(1, n_steps + 1):
-        step(robot, dt)
-        time = index * dt
-        exact_x, exact_vx = exact_state(
-            time, INITIAL_POSITION[0], INITIAL_VELOCITY[0], PROPULSION_FORCE
-        )
-        exact_y, exact_vy = exact_state(
-            time, INITIAL_POSITION[1], INITIAL_VELOCITY[1], 0.0
-        )
-        position_errors.append(
-            np.linalg.norm(robot.position - np.array([exact_x, exact_y]))
-        )
-        velocity_errors.append(
-            np.linalg.norm(robot.velocity - np.array([exact_vx, exact_vy]))
-        )
-
-    return max(position_errors), max(velocity_errors)
-
+    robot=Robot(position=X0,velocity=V0,theta=0.,radius=.2,mass=MASS,
+                propulsion_force=FORCE,translational_drag=DRAG)
+    n=round(FINAL_TIME/dt); pe=[]; ve=[]
+    for i in range(1,n+1):
+        step(robot,dt); t=i*dt
+        ex,vx=exact_state(t,X0[0],V0[0],FORCE)
+        ey,vy=exact_state(t,X0[1],V0[1],0.)
+        pe.append(np.linalg.norm(robot.position-[ex,ey]))
+        ve.append(np.linalg.norm(robot.velocity-[vx,vy]))
+    return max(pe),max(ve)
 
 def main():
-    time_steps = (0.04, 0.02, 0.01, 0.005)
-    results = [run(dt) for dt in time_steps]
-    print("dt          max position error   order    max velocity error   order")
-    previous = None
-    for dt, (position_error, velocity_error) in zip(time_steps, results):
-        if previous is None:
-            position_order = velocity_order = float("nan")
-        else:
-            position_order = np.log2(previous[0] / position_error)
-            velocity_order = np.log2(previous[1] / velocity_error)
-        print(
-            f"{dt:<11.5g} {position_error:<20.8e} "
-            f"{position_order:<8.4f} {velocity_error:<20.8e} "
-            f"{velocity_order:.4f}"
-        )
-        previous = (position_error, velocity_error)
-
-
-if __name__ == "__main__":
-    main()
+    parser=argparse.ArgumentParser()
+    parser.add_argument("--output-dir",default="results/validation")
+    parser.add_argument("--no-show",action="store_true")
+    args=parser.parse_args(); out=Path(args.output_dir); out.mkdir(parents=True,exist_ok=True)
+    dts=(.04,.02,.01,.005); results=[run(dt) for dt in dts]
+    rows=[]; previous=None
+    for dt,(ep,ev) in zip(dts,results):
+        for metric,error in (("position",ep),("velocity",ev)):
+            order="" if previous is None else np.log2(previous[metric]/error)
+            rows.append((dt,metric,error,order))
+        previous={"position":ep,"velocity":ev}
+    with (out/"free_motion_validation.csv").open("w",newline="") as f:
+        w=csv.writer(f); w.writerow(("dt","metric","max_abs_error","observed_order")); w.writerows(rows)
+    fig,ax=plt.subplots(figsize=(6,4))
+    ax.loglog(dts,[r[0] for r in results],"o-",label="Position")
+    ax.loglog(dts,[r[1] for r in results],"o-",label="Velocity")
+    ax.set_xlabel("dt"); ax.set_ylabel("Maximum absolute error")
+    ax.set_title("Free translation convergence"); ax.grid(True,which="both",alpha=.3); ax.legend()
+    fig.tight_layout(); fig.savefig(out/"free_motion_validation.png",dpi=160)
+    if not args.no_show: plt.show()
+    print("dt, position error, velocity error")
+    for dt,(ep,ev) in zip(dts,results): print(f"{dt:.5g}, {ep:.6e}, {ev:.6e}")
+    print(f"Saved diagnostics in {out}")
+if __name__=="__main__": main()

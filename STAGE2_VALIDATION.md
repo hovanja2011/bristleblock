@@ -1,54 +1,70 @@
-# Stage 2 — reproducible analytical validation experiments
+# Stage 2 — reproducible verification and visualization
 
-Status: initial benchmark pair added; CI validation pending.
+Status: the initial analytical benchmark pair passed CI. The expanded diagnostic suite and its new Toner–Tu tests are now included; the numerical experiments should be run locally before their numerical outputs are treated as verified.
 
-## Purpose
+## Keep three kinds of evidence separate
 
-Stage 2 turns selected analytical checks into reproducible experiments with
-fixed physical parameters and initial conditions. Each benchmark reports
-quantitative errors and refinement behaviour. It does not introduce new
-physical parameters fitted to the numerical output.
+1. **Code verification:** tests establish that implementation behaves as specified.
+2. **Numerical verification:** refinement studies quantify discretization error and observed convergence for a defined problem.
+3. **Experimental validation:** comparison with physical bristlebots data; this repository does not yet provide that dataset.
 
-## Implemented benchmark pair
+## Bristlebots benchmarks
 
-### Bristlebots: free propulsion with linear drag
+### Free translation with linear drag
+The free-motion experiment compares position and velocity with the exact solution of
+\(m\dot v_x=F-\gamma v_x\), \(m\dot v_y=-\gamma v_y\).
+The semi-implicit Euler integrator is expected to converge globally at first order.
 
-The reference problem is
-\[
-m\dot v_x = F-\gamma v_x,\qquad
-m\dot v_y = -\gamma v_y.
-\]
-The exact velocity is exponential and the exact position follows by
-integration. The numerical update is compared at matched physical times.
-Both position and velocity errors are measured for successively halved
-time steps. The current integrator is semi-implicit Euler, so first-order
-global convergence is expected.
+### Active rotation with rotational drag
+The rotational experiment compares angular velocity and angle with the exact solution of
+\(I\dot\omega=\tau-\gamma_r\omega\), \(\dot\theta=\omega\).
+The propulsion force acts through the centre of mass; this benchmark isolates the independent active torque.
 
-Run:
-\`\`\`bash
-python bristlebots/experiments/free_motion_validation.py
-\`\`\`
+### Head-on damped collision
+The head-on experiment begins at first contact with zero overlap and no tangential friction. The normal overlap obeys
+\(m_{\rm eff}\ddot\delta+c_n\dot\delta+k_n\delta=0\), with \(m_{\rm eff}=m/2\).
+It compares overlap, overlap rate and centre positions with the underdamped analytical solution before separation.
 
-### Toner–Tu: periodic linear acoustic Fourier mode
+### Oblique frictionless collision
+The oblique experiment compares final velocities with the exact elastic hard-disk collision map and reports linear momentum, kinetic energy, angular momentum and maximum penalty overlap. The compliant finite-stiffness trajectory is not an exact hard-contact trajectory; the output is a time-step refinement and conservation diagnostic at fixed stiffness.
 
-A small-amplitude density perturbation and zero initial velocity evolve as a
-periodic acoustic mode. The numerical solution is compared with the
-continuum solution at fixed physical time on successively refined grids.
-The time step is reduced as \(\Delta t\propto \Delta x^2\), making the
-third-order time-integration error subdominant to the second-order centred
-spatial error.
+## Toner–Tu benchmarks
 
-Run:
-\`\`\`bash
-python toner_tu/experiments/periodic_acoustic_convergence.py
-\`\`\`
+### Periodic undamped acoustic mode
+The periodic acoustic experiment compares a small-amplitude Fourier mode with the continuum linear acoustic solution.
 
-## Scope and limitations
+### Periodic damped acoustic mode
+The damped acoustic experiment includes velocity diffusion. Reference amplitudes are obtained from the exact matrix exponential of the continuum linearized Fourier-mode system. The finite-difference solver is compared at a fixed physical time over grid refinement.
 
-- These are reference problems, not validation against experimental bristlebots data.
-- The Toner–Tu acoustic benchmark validates a linearized, small-amplitude
-  regime; it does not establish convergence of the full nonlinear model.
-- The bristlebots benchmark validates free translation with linear drag,
-  not contact dynamics or propulsion calibration.
-- Maze geometry remains the rectangular closed box. Internal obstacles and
-  rounded walls belong to a later geometry stage.
+### Nonlinear homogeneous ordering
+The nonlinear ordering experiment isolates the full cubic local term
+\(\dot v=(\alpha-\beta |v|^2)v\) in a spatially uniform state. The exact solution is logistic in \(|v|^2\). This is a nonlinear local-saturation benchmark, **not** a test of nonlinear spatial pattern formation, vortices or nonlinear transport.
+
+## Reproducibility and outputs
+
+From the repository root:
+
+~~~bash
+python -m pip install -e "./toner_tu[viz]"
+python -m pip install -e "./mazes"
+python -m pip install -e "./bristlebots"
+python experiments/run_validation_suite.py
+~~~
+
+Use --no-show for headless runs. Results are written to results/validation:
+CSV error tables, PNG plots, and a combined summary.csv. Individual scripts
+accept --output-dir PATH and --no-show.
+
+The interactive animation is generated from sampled numerical states; the
+quantitative plots overlay the analytical solution or clearly identified
+reference. Animations are qualitative visualizations; error tables are the
+quantitative comparison.
+
+## Limitations and interpretation
+
+- Translation, rotation and head-on normal-contact benchmarks compare with continuous analytical solutions; semi-implicit Euler should show first-order global convergence.
+- The oblique-collision benchmark uses the ideal elastic collision map as a final-state reference and separately monitors conserved quantities. It does not claim that finite penalty stiffness reproduces a hard-contact path exactly.
+- The Toner–Tu damped-mode benchmark checks a linearized Fourier mode with a small perturbation. The nonlinear benchmark checks only homogeneous cubic saturation.
+- Nonlinear spatial Toner–Tu regimes still need separate verification, ideally with manufactured solutions or a trusted independent high-resolution reference.
+- Maze geometry remains a rectangular closed box. Internal obstacles and rounded walls belong to a later geometry stage.
+- None of these benchmarks constitutes validation against physical bristlebots experiments.
