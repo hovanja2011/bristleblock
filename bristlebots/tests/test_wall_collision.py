@@ -278,10 +278,11 @@ def make_contact_parameters(
     mu_static,
     mu_kinetic,
     tangential_stiffness=1e4,
+    normal_damping=0.0,
 ):
     return ContactParameters(
         normal_stiffness=NORMAL_STIFFNESS,
-        normal_damping=0.0,
+        normal_damping=normal_damping,
         mu_static=mu_static,
         mu_kinetic=mu_kinetic,
         tangential_stiffness=tangential_stiffness,
@@ -442,9 +443,8 @@ def test_normal_contact_force_with_damping():
     parameters = make_contact_parameters(
         mu_static=0.0,
         mu_kinetic=0.0,
+        normal_damping=damping,
     )
-
-    parameters.normal_damping = damping
 
     state = ContactState()
 

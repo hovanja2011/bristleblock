@@ -34,6 +34,16 @@ class BoxDomainOperators:
     """
 
     @staticmethod
+    def _check_field(field: np.ndarray, grid: Grid, name: str = "field") -> None:
+        """Validate a cell-centred field against its physical grid."""
+        if not isinstance(field, np.ndarray) or field.shape != (grid.ny, grid.nx):
+            raise ValueError(
+                f"{name} must have shape {(grid.ny, grid.nx)} for the supplied grid."
+            )
+        if not np.all(np.isfinite(field)):
+            raise ValueError(f"{name} must contain only finite values.")
+
+    @staticmethod
     def _ghost(field: np.ndarray, component: str) -> np.ndarray:
         """Add one reflected ghost-cell layer around a cell-centred field."""
         if component not in {"rho", "vx", "vy"}:
@@ -63,6 +73,7 @@ class BoxDomainOperators:
 
     def gradient(self, field: np.ndarray, grid: Grid) -> tuple[np.ndarray, np.ndarray]:
         """Second-order centred gradient with homogeneous Neumann walls."""
+        self._check_field(field, grid)
         ghost = self._ghost(field, "rho")
         dfdx = (ghost[1:-1, 2:] - ghost[1:-1, :-2]) / (2.0 * grid.dx)
         dfdy = (ghost[2:, 1:-1] - ghost[:-2, 1:-1]) / (2.0 * grid.dy)
@@ -70,6 +81,7 @@ class BoxDomainOperators:
 
     def laplacian(self, field: np.ndarray, grid: Grid, component: str) -> np.ndarray:
         """Five-point Laplacian with component-aware reflected wall values."""
+        self._check_field(field, grid)
         ghost = self._ghost(field, component)
         centre = ghost[1:-1, 1:-1]
         d2dx2 = (ghost[1:-1, 2:] - 2.0*centre + ghost[1:-1, :-2]) / grid.dx**2
@@ -78,6 +90,9 @@ class BoxDomainOperators:
 
     def advective_derivative(self, vx: np.ndarray, vy: np.ndarray, grid: Grid) -> tuple[np.ndarray, np.ndarray]:
         """First-order upwind approximation of (v dot grad)v."""
+        self._check_field(vx, grid, "vx")
+        self._check_field(vy, grid, "vy")
+
         def upwind(field: np.ndarray, component: str) -> tuple[np.ndarray, np.ndarray]:
             ghost = self._ghost(field, component)
             dfdx = np.where(vx >= 0.0, (field - ghost[1:-1, :-2])/grid.dx,
@@ -93,6 +108,8 @@ class BoxDomainOperators:
         """Interpolate cell velocities to faces; external normal faces are zero."""
         if vx.shape != vy.shape or vx.ndim != 2:
             raise ValueError("vx and vy must be 2D arrays with identical shapes.")
+        if not np.all(np.isfinite(vx)) or not np.all(np.isfinite(vy)):
+            raise ValueError("Face velocities require finite cell velocities.")
         ny, nx = vx.shape
         u_face = np.zeros((ny, nx + 1), dtype=float)
         v_face = np.zeros((ny + 1, nx), dtype=float)
@@ -102,8 +119,11 @@ class BoxDomainOperators:
 
     def density_rhs(self, rho: np.ndarray, vx: np.ndarray, vy: np.ndarray, grid: Grid) -> np.ndarray:
         """Conservative first-order upwind continuity equation with closed walls."""
-        if rho.shape != vx.shape or rho.shape != vy.shape or rho.shape != (grid.ny, grid.nx):
-            raise ValueError("rho, vx and vy must match the supplied grid.")
+        self._check_field(rho, grid, "rho")
+        self._check_field(vx, grid, "vx")
+        self._check_field(vy, grid, "vy")
+        if np.any(rho < 0.0):
+            raise ValueError("rho must be non-negative.")
         u_face, v_face = self.face_velocities(vx, vy)
         flux_x = np.zeros_like(u_face)
         flux_y = np.zeros_like(v_face)

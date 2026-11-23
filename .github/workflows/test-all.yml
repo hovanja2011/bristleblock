@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - unified-toner-tu-maze
+      - stage1-physics-audit
   pull_request:
   workflow_dispatch:
 
@@ -21,7 +22,7 @@ jobs:
       - name: Install all three projects and test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e "./toner_tu[test]"
+          python -m pip install -e "./toner_tu[viz,test]"
           python -m pip install -e "./mazes"
           python -m pip install -e "./bristlebots[test]"
       - name: Run continuum-model tests
@@ -30,3 +31,12 @@ jobs:
         run: python -m pytest -q mazes/tests
       - name: Run bristlebots tests
         run: python -m pytest -q bristlebots/tests
+      - name: Run analytical validation experiments
+        run: python experiments/run_validation_suite.py --no-show
+      - name: Upload validation plots and tables
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-results
+          path: results/validation/
+          if-no-files-found: error
+          retention-days: 14

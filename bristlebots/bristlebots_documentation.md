@@ -71,7 +71,10 @@ The `direction` property returns this vector. The active force is applied at the
 \mathbf F_a=F_a\mathbf e(\theta).
 \]
 
-Because the active force is applied at the center, it produces no direct torque in the present model.
+The current implementation also accepts an independently specified active
+torque `active_torque`. This torque is not derived from the propulsion force;
+it represents a separate applied rotational drive. No propulsion offset or
+moment `r × F_a` is included in this model.
 
 The `free_speed` property returns
 
@@ -126,11 +129,11 @@ The rotational equation is
 \[
 I\dot\omega
 =
--\zeta_r\omega
+\tau_a-\zeta_r\omega
 +\sum_j\tau_{c,j},
 \]
 
-with
+where \(\tau_a\) is the independently prescribed `active_torque`, with
 
 \[
 \dot\theta=\omega.
@@ -138,7 +141,9 @@ with
 
 The rotational drag torque is linear in angular velocity. Contact forces can generate torque if their line of action does not pass through the robot center. In the current disk–wall model, the normal force acts along the radius and therefore produces no torque; the tangential force produces the contact torque.
 
-There is no intrinsic active torque or spontaneous chirality in the current implementation.
+The model can represent an imposed active torque through `active_torque`,
+but does not derive that torque from motor geometry or vibration mechanics.
+It does not include an off-centre propulsion force.
 
 ---
 
@@ -595,12 +600,13 @@ The current model makes the following assumptions:
 1. Motion is restricted to a plane.
 2. Each robot is a rigid, uniform disk.
 3. The walls are finite, rigid, and immobile.
-4. Active propulsion has constant magnitude and acts along the body axis through the center.
-5. Translational and rotational drag are linear.
-6. Contact is represented by finite-stiffness forces, allowing small numerical overlap.
-7. Tangential friction uses a Cundall–Strack history spring with Coulomb limits.
-8. The contact normal and tangent are calculated from the closest point on each wall segment.
-9. Robot–robot contacts and many-body collision resolution are not present in the supplied implementation.
+4. Active propulsion has constant magnitude and acts along the body axis through the center of mass.
+5. An independently specified active torque `active_torque` may act on the robot; it is not derived from the propulsion force.
+6. Translational and rotational drag are linear.
+7. Contact is represented by finite-stiffness forces, allowing small numerical overlap.
+8. Tangential friction uses a Cundall–Strack history spring with Coulomb limits.
+9. The contact normal and tangent are calculated from the closest point on each wall segment.
+10. Robot–robot contacts and many-body collision resolution are not present in the supplied implementation.
 
 Some numerical and software limitations should also be kept in mind:
 

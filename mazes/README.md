@@ -1,29 +1,44 @@
 # Maze geometry and boundary operators
 
-This is the third independent project in the repository. It owns physical
-domains, wall geometry and the numerical operators needed to impose their
-boundary conditions.
+The maze package owns physical domains, internal obstacles and boundary-specific
+numerical operators. It provides BoxMaze, CircleObstacle, RoundedSegment,
+RoundedPolyline, MazeGeometry, and MazeDomainOperators.
 
-The first domain is `BoxMaze`: an empty rectangle with four impermeable
-free-slip walls. Cell-centred normal velocity components are odd-reflected
-across the corresponding wall; scalar and tangential components are
-even-reflected. Density transport is a conservative finite-volume flux
-divergence, with external face fluxes set exactly to zero.
+RoundedPolyline describes a wall centreline with finite thickness. Its
+signed-distance geometry is the union of capsules along the path, so bends
+are thickened by a disk and do not have sharp zero-radius corners.
 
-The package implements the `toner_tu.domain.DomainOperators` protocol so the
-continuum equations do not need to know whether they are running in a box,
-corridor or a more complicated maze. The current box Laplacian uses a
-five-point stencil and its Neumann-wall accuracy is checked by a grid
-refinement test.
+Example:
 
-Future geometry work belongs here: straight internal walls, passages,
-rounded corners, and eventually more accurate boundary representations.
-Tests in this project check geometry and boundary behaviour; they do not
-duplicate the Toner–Tu bulk-equation tests.
+~~~python
+from mazes import MazeGeometry, CircleObstacle, RoundedPolyline
+
+maze = MazeGeometry(
+    width=20.0, height=12.0,
+    obstacles=(
+        RoundedPolyline(((4.0, 3.0), (12.0, 3.0), (12.0, 9.0)), radius=0.25),
+        CircleObstacle((16.0, 7.0), radius=1.0),
+    ),
+)
+grid = maze.grid(200, 120)
+operators = maze.operators(grid)
+fields = operators.mask_fields(fields)
+result = integrate(fields, grid, parameters, dt=1e-3, n_steps=1000,
+                   domain=operators)
+~~~
+
+Obstacle shapes are analytic signed-distance functions, but the current
+operator discretization is a Cartesian cell-centre mask. Interfaces are
+therefore resolved at grid scale, not by cut cells. Density flux through every
+face adjacent to a solid cell is exactly zero, so the discrete continuity
+equation is conservative. Velocity diffusion uses a zero-normal-gradient,
+free-slip-like mask closure. This is a first geometry-capable solver, not yet
+a high-order curved-wall scheme. Grid refinement is required for quantitative
+results near rounded boundaries.
 
 Install after the continuum package:
 
-```bash
+~~~bash
 python -m pip install -e ../toner_tu
 python -m pip install -e .
-```
+~~~

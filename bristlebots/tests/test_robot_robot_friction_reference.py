@@ -112,14 +112,10 @@ def reference_rhs(t, y):
         KN * overlap - CN * normal_velocity,
     )
 
-    # Contact point velocities
-    velocity_contact_a = (
-        vel_a + omega_a * R * tangent
-    )
-
-    velocity_contact_b = (
-        vel_b - omega_b * R * tangent
-    )
+    # A common midpoint contact point is used for the compliant overlap.
+    contact_arm = 0.5 * distance
+    velocity_contact_a = vel_a + omega_a * contact_arm * tangent
+    velocity_contact_b = vel_b - omega_b * contact_arm * tangent
 
     vt = np.dot(
         velocity_contact_a - velocity_contact_b,
@@ -137,8 +133,8 @@ def reference_rhs(t, y):
     force_a = -fn * normal + ft * tangent
     force_b = -force_a
 
-    torque_a = R * ft
-    torque_b = R * ft
+    torque_a = contact_arm * ft
+    torque_b = contact_arm * ft
 
     # Equations of motion
     acceleration_a = (

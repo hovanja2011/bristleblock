@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 
 
-@dataclass
+@dataclass(frozen=True)
 class ContactParameters:
     normal_stiffness: float
     normal_damping: float
@@ -14,6 +14,15 @@ class ContactParameters:
     tangential_damping: float = 0.0
 
     def __post_init__(self):
+        values = np.asarray(
+            [self.normal_stiffness, self.normal_damping, self.mu_static,
+             self.mu_kinetic, self.tangential_stiffness,
+             self.tangential_damping],
+            dtype=float,
+        )
+        if not np.all(np.isfinite(values)):
+            raise ValueError("Contact parameters must be finite.")
+
         if self.normal_stiffness <= 0:
             raise ValueError("Normal stiffness must be positive.")
 
@@ -65,7 +74,7 @@ def robot_wall_contact(robot, wall, dt, state, parameters):
         torque: contact torque around the robot center
     """
 
-    if dt <= 0:
+    if not np.isfinite(dt) or dt <= 0:
         raise ValueError("Time step must be positive.")
 
     _, normal, overlap = wall.contact_geometry(
@@ -76,6 +85,7 @@ def robot_wall_contact(robot, wall, dt, state, parameters):
     # No contact: erase the contact history.
     if overlap <= 0.0:
         state.tangential_displacement = 0.0
+        state.previous_tangent = None
 
         zero = np.zeros(2)
 
@@ -109,6 +119,7 @@ def robot_wall_contact(robot, wall, dt, state, parameters):
     # there can be no friction force.
     if fn <= 0.0:
         state.tangential_displacement = 0.0
+        state.previous_tangent = None
 
         zero = np.zeros(2)
 
@@ -144,9 +155,16 @@ def robot_wall_contact(robot, wall, dt, state, parameters):
     # Tangential direction
     tangent = np.array([-normal[1], normal[0]])
 
+    # Transport the tangential spring history when the contact normal changes,
+    # e.g. while a disk moves around a finite wall-segment endpoint.
+    if state.previous_tangent is not None:
+        old_displacement = state.tangential_displacement * state.previous_tangent
+        state.tangential_displacement = float(np.dot(old_displacement, tangent))
+    state.previous_tangent = tangent.copy()
+
     tangential_velocity = np.dot(contact_velocity, tangent)
 
-    # Update tangential displacement history
+    # Update tangential displacement history.
     state.tangential_displacement += tangential_velocity * dt
 
     # Trial friction force
@@ -244,7 +262,7 @@ def robot_robot_contact(
     state,
     parameters,
 ):
-    if dt <= 0:
+    if not np.isfinite(dt) or dt <= 0:
         raise ValueError("Time step must be positive.")
 
     displacement = robot_b.position - robot_a.position
@@ -305,9 +323,13 @@ def robot_robot_contact(
             mode="no_load",
         )
 
-    # Contact radius vectors
-    r_a = robot_a.radius * normal
-    r_b = -robot_b.radius * normal
+    # Use one shared contact point: the midpoint between the nearest surface
+    # points. For non-overlapping disks this reduces to the physical surface
+    # radii; during penalty overlap it prevents an artificial force couple.
+    arm_a = 0.5 * (distance + robot_a.radius - robot_b.radius)
+    arm_b = 0.5 * (distance - robot_a.radius + robot_b.radius)
+    r_a = arm_a * normal
+    r_b = -arm_b * normal
 
     # Velocity of each contact point
     velocity_a = robot_a.velocity + robot_a.omega * np.array([

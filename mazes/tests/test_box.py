@@ -4,6 +4,7 @@ import pytest
 
 from mazes import BoxMaze
 from toner_tu.initial_conditions import uniform_state
+from toner_tu.fields import Fields
 from toner_tu.parameters import TonerTuParameters
 from toner_tu.solver import step, integrate
 
@@ -99,3 +100,74 @@ def test_box_conservative_density_flux_converges_under_grid_refinement():
     # First-order upwinding is expected to converge at least linearly.
     assert errors[0]/errors[1] > 2.0
     assert errors[1]/errors[2] > 2.0
+
+
+def test_box_operators_reject_fields_that_do_not_match_grid():
+    maze = BoxMaze(2.0, 1.0)
+    grid = maze.grid(8, 4)
+    ops = maze.operators()
+    wrong_shape = np.ones((4, 7))
+
+    with pytest.raises(ValueError, match="supplied grid"):
+        ops.gradient(wrong_shape, grid)
+    with pytest.raises(ValueError, match="supplied grid"):
+        ops.laplacian(wrong_shape, grid, "rho")
+    with pytest.raises(ValueError, match="supplied grid"):
+        ops.advective_derivative(wrong_shape, np.ones((4, 8)), grid)
+
+
+
+def test_box_linear_acoustic_standing_wave_converges_under_grid_refinement():
+    """Validate the coupled box solver against a small-amplitude Neumann mode.
+
+    For rho0=sigma=1, the linear acoustic solution is
+    rho = 1 + eps*cos(pi*x)*cos(pi*t),
+    vx  = eps*sin(pi*x)*sin(pi*t), with vx=0 at both walls.
+    The small amplitude makes the Toner-Tu cubic term negligible; the
+    expected first-order convergence is set by the conservative upwind
+    density flux used by BoxDomainOperators.
+    """
+    errors = []
+    epsilon = 1e-5
+    final_time = 0.1
+
+    for n in (16, 32, 64):
+        maze = BoxMaze(1.0, 1.0)
+        grid = maze.grid(n, 4)
+        x, _ = grid.coordinates()
+        rho = 1.0 + epsilon * np.cos(np.pi * x)
+        state = Fields(rho, np.zeros_like(rho), np.zeros_like(rho))
+        params = TonerTuParameters(
+            alpha=0.0,
+            beta=1.0,
+            sigma=1.0,
+            diffusion=0.0,
+            lambda_=0.0,
+        )
+
+        dt = final_time / (n * n)
+        result = integrate(
+            state,
+            grid,
+            params,
+            dt=dt,
+            n_steps=n * n,
+            domain=maze.operators(),
+        )
+
+        rho_exact = (
+            1.0
+            + epsilon * np.cos(np.pi * x) * np.cos(np.pi * final_time)
+        )
+        vx_exact = (
+            epsilon * np.sin(np.pi * x) * np.sin(np.pi * final_time)
+        )
+        error = np.sqrt(np.mean(
+            ((result.rho - rho_exact) / epsilon) ** 2
+            + ((result.vx - vx_exact) / epsilon) ** 2
+        ))
+        errors.append(float(error))
+
+    assert errors[0] > errors[1] > errors[2]
+    assert errors[0] / errors[1] > 1.4
+    assert errors[1] / errors[2] > 1.4
