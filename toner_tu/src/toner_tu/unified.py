@@ -9,18 +9,20 @@ from toner_tu.maze_geometry import MazeGeometry
 
 @dataclass(frozen=True)
 class UnifiedBoundaryConditions:
-    """Outer boundary options. Periodic applies in both coordinate directions."""
-    periodic: bool = True
+    """Outer boundary mode: periodic, closed box, or open channel."""
+
+    mode: str = "periodic"
     rho_in: float = 1.0
     vx_in: float = 0.0
     vy_in: float = 0.0
 
     def __post_init__(self):
+        if self.mode not in {"periodic", "box", "open_channel"}:
+            raise ValueError("mode must be 'periodic', 'box', or 'open_channel'")
         if self.rho_in < 0:
             raise ValueError("rho_in must be non-negative")
         if not np.isfinite([self.rho_in, self.vx_in, self.vy_in]).all():
             raise ValueError("Boundary values must be finite")
-
 
 def _validate(fields: Fields, grid: Grid, geometry: MazeGeometry):
     geometry.validate_for(grid)
@@ -99,9 +101,6 @@ def _density_flux_rhs(fields, grid, geometry, boundary):
         fy[0, :] = np.where(fluid[-1, :] & fluid[0, :], v_bottom * rho_bottom, 0)
         fy[-1, :] = fy[0, :]
     elif boundary.mode == "box":
-        # Closed box: no mass flux through any outer wall.
-        pass
-    elif boundary.mode == "box":
         # Closed box walls: outer-face mass flux is zero.
         pass
     else:
@@ -128,7 +127,7 @@ def compute_rhs(fields, grid, params, geometry=None, boundary=None):
     drho = _density_flux_rhs(fields, grid, geometry, boundary)
     vx_x, vx_y, lap_vx = _derivatives(vx, grid, geometry, boundary.mode == "periodic")
     vy_x, vy_y, lap_vy = _derivatives(vy, grid, geometry, boundary.mode == "periodic")
-    rho_x, rho_y, _ = _derivatives(rho, grid, geometry, boundary.periodic)
+    rho_x, rho_y, _ = _derivatives(rho, grid, geometry, boundary.mode == "periodic")
 
     adv_vx = vx * vx_x + vy * vx_y
     adv_vy = vx * vy_x + vy * vy_y
