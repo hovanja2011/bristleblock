@@ -1,0 +1,32 @@
+name: Test all projects
+
+on:
+  push:
+    branches:
+      - main
+      - unified-toner-tu-maze
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install all three projects and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e "./toner_tu[test]"
+          python -m pip install -e "./mazes"
+          python -m pip install -e "./bristlebots[test]"
+      - name: Run continuum-model tests
+        run: python -m pytest -q toner_tu/tests
+      - name: Run maze and boundary tests
+        run: python -m pytest -q mazes/tests
+      - name: Run bristlebots tests
+        run: python -m pytest -q bristlebots/tests
