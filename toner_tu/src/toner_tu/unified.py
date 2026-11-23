@@ -89,7 +89,7 @@ def _density_flux_rhs(fields, grid, geometry, boundary):
         0.0,
     )
 
-    if boundary.periodic:
+    if boundary.mode == "periodic":
         u_left = 0.5 * (vx[:, -1] + vx[:, 0])
         rho_left = np.where(u_left >= 0, rho[:, -1], rho[:, 0])
         fx[:, 0] = np.where(fluid[:, -1] & fluid[:, 0], u_left * rho_left, 0)
@@ -98,6 +98,9 @@ def _density_flux_rhs(fields, grid, geometry, boundary):
         rho_bottom = np.where(v_bottom >= 0, rho[-1, :], rho[0, :])
         fy[0, :] = np.where(fluid[-1, :] & fluid[0, :], v_bottom * rho_bottom, 0)
         fy[-1, :] = fy[0, :]
+    elif boundary.mode == "box":
+        # Closed box: no mass flux through any outer wall.
+        pass
     else:
         fx[:, 0] = np.where(fluid[:, 0] & (boundary.vx_in >= 0),
                             boundary.vx_in * boundary.rho_in, 0.0)
@@ -111,7 +114,7 @@ def _density_flux_rhs(fields, grid, geometry, boundary):
 
 
 def compute_rhs(fields, grid, params, geometry=None, boundary=None):
-    """Unified Toner-Tu RHS for periodic/open domains with solid obstacles."""
+    """Unified Toner-Tu RHS for periodic, closed-box, and open-channel boundaries with solid obstacles."""
     if geometry is None:
         geometry = MazeGeometry.empty(grid)
     if boundary is None:
@@ -120,7 +123,7 @@ def compute_rhs(fields, grid, params, geometry=None, boundary=None):
 
     rho, vx, vy = fields.rho, fields.vx, fields.vy
     drho = _density_flux_rhs(fields, grid, geometry, boundary)
-    vx_x, vx_y, lap_vx = _derivatives(vx, grid, geometry, boundary.periodic)
+    vx_x, vx_y, lap_vx = _derivatives(vx, grid, geometry, boundary.mode == "periodic")
     vy_x, vy_y, lap_vy = _derivatives(vy, grid, geometry, boundary.periodic)
     rho_x, rho_y, _ = _derivatives(rho, grid, geometry, boundary.periodic)
 
