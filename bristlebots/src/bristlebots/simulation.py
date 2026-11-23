@@ -1,3 +1,4 @@
+"""Time integration of bristlebots with propulsion, drag and contact forces."""
 import numpy as np
 
 from bristlebots.contacts import (
