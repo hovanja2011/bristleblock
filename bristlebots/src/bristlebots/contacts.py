@@ -323,9 +323,13 @@ def robot_robot_contact(
             mode="no_load",
         )
 
-    # Contact radius vectors
-    r_a = robot_a.radius * normal
-    r_b = -robot_b.radius * normal
+    # Use one shared contact point: the midpoint between the nearest surface
+    # points. For non-overlapping disks this reduces to the physical surface
+    # radii; during penalty overlap it prevents an artificial force couple.
+    arm_a = 0.5 * (distance + robot_a.radius - robot_b.radius)
+    arm_b = 0.5 * (distance - robot_a.radius + robot_b.radius)
+    r_a = arm_a * normal
+    r_b = -arm_b * normal
 
     # Velocity of each contact point
     velocity_a = robot_a.velocity + robot_a.omega * np.array([
