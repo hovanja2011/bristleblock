@@ -38,7 +38,7 @@ def main():
         command = [sys.executable, str(ROOT/script), "--output-dir", str(output)]
         if args.no_show:
             command.append("--no-show")
-        print("\\n>>> " + " ".join(command), flush=True)
+        print("\n>>> " + " ".join(command), flush=True)
         subprocess.run(command, cwd=ROOT, check=True)
 
     combined = []

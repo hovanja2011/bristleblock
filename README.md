@@ -34,8 +34,8 @@ python experiments/run_validation_suite.py
 
 This opens Matplotlib plots and interactive animations. The bristlebots contact
 study displays stiffness/friction sweeps; the nonlinear Toner–Tu run animates
-density, velocity and vorticity. The maze experiment plots rounded obstacles
-and the geometric grid-refinement error.
+density, velocity and vorticity. The maze experiment plots a rounded polyline
+wall, a circular obstacle and geometric grid-refinement error.
 
 For a non-interactive run that only writes files:
 

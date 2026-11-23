@@ -21,6 +21,8 @@ class MazeDomainOperators:
     def mask_fields(self, fields: Fields) -> Fields:
         """Copy a state and set density and velocity to zero inside solids."""
         self._check(fields.rho, "rho")
+        self._check(fields.vx, "vx")
+        self._check(fields.vy, "vy")
         result = fields.copy()
         for array in (result.rho, result.vx, result.vy):
             array[self._solid] = 0.0
