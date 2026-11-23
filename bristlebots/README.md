@@ -13,10 +13,11 @@ robots and their interactions.
 This package is intentionally separate from the continuum Toner–Tu model.
 
 
-The propulsion force is applied at the body-fixed point `propulsion_offset`,
-measured from the centre of mass. Its moment `r × F` is included in the
-rotational equation; `active_torque` represents any additional independent
-torque.
+The propulsion force acts along the body axis through the centre of mass
+and therefore contributes no direct torque. The independent parameter
+`active_torque` specifies an applied active torque in the rotational equation.
+It should only represent a physical torque not already included in the
+resultant propulsion force.
 
 Contact is represented by a compliant penalty law (linear normal
 spring-dashpot and Cundall–Strack tangential friction). Consequently, small

@@ -8,44 +8,25 @@ from bristlebots.simulation import step, step_robots
 
 
 @pytest.mark.parametrize("integrator", [step, step_robots])
-def test_body_fixed_propulsion_offset_generates_the_correct_torque(integrator):
+def test_central_propulsion_does_not_generate_torque(integrator):
     robot = Robot(
         position=(0.0, 0.0),
         velocity=(0.0, 0.0),
-        theta=0.0,
+        theta=0.4,
         radius=0.5,
         mass=2.0,
         propulsion_force=3.0,
-        propulsion_offset=(0.0, 0.2),
     )
 
     if integrator is step:
-        integrator(robot, 1e-3)
+        diagnostics = integrator(robot, 1e-3)
     else:
-        integrator([robot], 1e-3)
+        diagnostics = integrator([robot], 1e-3)[0]
 
-    # r x F = (0, 0.2) x (3, 0) = -0.6 N m.
-    expected_torque = -0.6
-    expected_omega = expected_torque / robot.moment_of_inertia * 1e-3
-    expected_velocity = np.array([3.0 / 2.0 * 1e-3, 0.0])
-
-    np.testing.assert_allclose(robot.velocity, expected_velocity, atol=1e-15)
-    assert robot.omega == pytest.approx(expected_omega, abs=1e-15)
-
-
-def test_propulsion_offset_is_rotated_with_body_heading():
-    robot = Robot(
-        position=(0.0, 0.0),
-        velocity=(0.0, 0.0),
-        theta=np.pi / 2,
-        radius=1.0,
-        mass=1.0,
-        propulsion_force=2.0,
-        propulsion_offset=(0.0, 0.25),
-    )
-
-    # The rotated offset is (-0.25, 0), and the force is (0, 2).
-    assert robot.propulsion_torque == pytest.approx(-0.5)
+    assert robot.omega == pytest.approx(0.0, abs=1e-15)
+    assert diagnostics["active_torque"] == 0.0
+    assert diagnostics["total_torque"] == pytest.approx(0.0, abs=1e-15)
+    assert "propulsion_torque" not in diagnostics
 
 
 @pytest.mark.parametrize(
@@ -56,7 +37,6 @@ def test_propulsion_offset_is_rotated_with_body_heading():
         {"translational_drag": -1.0},
         {"rotational_drag": np.nan},
         {"theta": np.inf},
-        {"propulsion_offset": (0.0, np.nan)},
         {"position": (0.0, np.inf)},
         {"velocity": (0.0,)},
     ],
