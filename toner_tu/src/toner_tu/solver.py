@@ -66,7 +66,6 @@ def step(fields: Fields, grid: Grid, params: TonerTuParameters, dt: float,
     stage1 = Fields(fields.rho + dt*rhs0.rho, fields.vx + dt*rhs0.vx, fields.vy + dt*rhs0.vy)
     if np.any(stage1.rho < 0) or not all(np.isfinite(a).all() for a in (stage1.rho, stage1.vx, stage1.vy)):
         raise ValueError("First RK stage produced an invalid state.")
-
     rhs1 = compute_rhs(stage1, grid, params, domain)
     euler2 = Fields(stage1.rho + dt*rhs1.rho, stage1.vx + dt*rhs1.vx, stage1.vy + dt*rhs1.vy)
     result = _combine(fields, euler2, 0.5, 0.5)
@@ -78,10 +77,11 @@ def step(fields: Fields, grid: Grid, params: TonerTuParameters, dt: float,
 def integrate(fields: Fields, grid: Grid, params: TonerTuParameters, dt: float,
               n_steps: int, domain: DomainOperators | None = None, *,
               cfl: float = 0.4) -> Fields:
-    """Integrate n output intervals, automatically subdividing unstable steps.
+    """Integrate n output intervals with state-dependent adaptive substepping.
 
-    dt is the requested physical interval per outer step. Each interval is
-    split into equal stable substeps, preserving the requested final time.
+    dt is the requested physical interval per outer step. The stable bound is
+    recomputed after every substep, so growth of speed or density cannot leave
+    the remaining part of an interval using a stale estimate.
     """
     if not np.isfinite(dt) or dt <= 0:
         raise ValueError("Time step dt must be finite and positive.")
@@ -92,9 +92,10 @@ def integrate(fields: Fields, grid: Grid, params: TonerTuParameters, dt: float,
 
     current = fields.copy()
     for _ in range(n_steps):
-        stable_dt = max_stable_dt(current, grid, params, cfl=cfl)
-        substeps = 1 if np.isinf(stable_dt) else max(1, int(np.ceil(dt / stable_dt)))
-        sub_dt = dt / substeps
-        for _ in range(substeps):
+        remaining = dt
+        while remaining > 1e-14 * dt:
+            stable_dt = max_stable_dt(current, grid, params, cfl=cfl)
+            sub_dt = remaining if np.isinf(stable_dt) else min(remaining, stable_dt)
             current = step(current, grid, params, sub_dt, domain, check_stability=False)
+            remaining -= sub_dt
     return current
