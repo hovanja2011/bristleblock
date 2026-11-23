@@ -8,7 +8,7 @@ construct mazes and does not implement maze-specific boundary conditions.
 - `domain.py`: protocol for domain-dependent spatial operators and periodic reference domain.
 - `operators.py`: periodic finite-difference operators.
 - `equations.py`: physical Toner–Tu right-hand side, independent of geometry.
-- `solver.py`: SSP-RK2 integration and a geometry-independent explicit stability estimate.
+- `solver.py`: SSP-RK3 integration and a geometry-independent explicit stability estimate.
 - `initial_conditions.py`, `diagnostics.py`, `visualization.py`: support tools.
 - `tests/`: tests for bulk equations, periodic operators, and time integration.
 
