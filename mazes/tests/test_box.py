@@ -99,3 +99,17 @@ def test_box_conservative_density_flux_converges_under_grid_refinement():
     # First-order upwinding is expected to converge at least linearly.
     assert errors[0]/errors[1] > 2.0
     assert errors[1]/errors[2] > 2.0
+
+
+def test_box_operators_reject_fields_that_do_not_match_grid():
+    maze = BoxMaze(2.0, 1.0)
+    grid = maze.grid(8, 4)
+    ops = maze.operators()
+    wrong_shape = np.ones((4, 7))
+
+    with pytest.raises(ValueError, match="supplied grid"):
+        ops.gradient(wrong_shape, grid)
+    with pytest.raises(ValueError, match="supplied grid"):
+        ops.laplacian(wrong_shape, grid, "rho")
+    with pytest.raises(ValueError, match="supplied grid"):
+        ops.advective_derivative(wrong_shape, np.ones((4, 8)), grid)
