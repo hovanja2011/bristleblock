@@ -13,19 +13,36 @@ import numpy as np
 
 from toner_tu.diagnostics import mean_speed, minimum_density, polarization, total_mass
 from toner_tu.fields import Fields, Grid
-from toner_tu.initial_conditions import random_velocity_state
 from toner_tu.operators import vorticity
 from toner_tu.parameters import TonerTuParameters
 from toner_tu.solver import integrate
 from toner_tu.visualization import animate_fields_with_vorticity
 
-GRID_N, DOMAIN_LENGTH, FINAL_TIME = 48, 24.0, 0.5
-DT_VALUES = (0.002, 0.001, 0.0005, 0.00025)
+GRID_N, DOMAIN_LENGTH, FINAL_TIME = 48, 24.0, 1.0
+DT_VALUES = (0.004, 0.002, 0.001, 0.0005)
 SEED = 42
 
 
 def initial_state(grid):
-    return random_velocity_state(grid, rho0=1.0, velocity_scale=0.1, seed=SEED)
+    """Seed long-wave random fluctuations around a weakly ordered state."""
+    rng = np.random.default_rng(SEED)
+    noise_x = rng.normal(size=(grid.ny, grid.nx))
+    noise_y = rng.normal(size=(grid.ny, grid.nx))
+    kx = 2.0*np.pi*np.fft.fftfreq(grid.nx, d=grid.dx)
+    ky = 2.0*np.pi*np.fft.fftfreq(grid.ny, d=grid.dy)
+    kx_grid, ky_grid = np.meshgrid(kx, ky)
+    k2 = kx_grid**2 + ky_grid**2
+    cutoff = 3.0*2.0*np.pi/min(grid.lx, grid.ly)
+    spectral_filter = np.exp(-(k2/cutoff**2)**2)
+    noise_x = np.fft.ifft2(np.fft.fft2(noise_x)*spectral_filter).real
+    noise_y = np.fft.ifft2(np.fft.fft2(noise_y)*spectral_filter).real
+    noise_x *= 0.08/np.sqrt(np.mean(noise_x**2))
+    noise_y *= 0.08/np.sqrt(np.mean(noise_y**2))
+    return Fields(
+        np.ones((grid.ny, grid.nx)),
+        0.05 + noise_x,
+        noise_y,
+    )
 
 
 def model_parameters():
