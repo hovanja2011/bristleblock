@@ -114,3 +114,47 @@ def test_periodic_acoustic_mode_does_not_gain_energy_from_time_integrator():
     # SSP-RK3 is dissipative, rather than exponentially amplifying, for
     # the imaginary eigenvalues of the centred periodic acoustic operator.
     assert final_energy <= initial_energy * (1.0 + 1e-9)
+
+
+def test_periodic_linear_acoustic_mode_converges_to_continuum_solution():
+    """Check space/time refinement against the continuum acoustic mode."""
+    from toner_tu.fields import Fields, Grid
+    from toner_tu.parameters import TonerTuParameters
+    from toner_tu.solver import integrate
+
+    amplitude = 1.0e-5
+    final_time = 0.1
+    errors = []
+
+    for nx in (16, 32, 64):
+        grid = Grid(nx=nx, ny=4, lx=1.0, ly=1.0)
+        x, _ = grid.coordinates()
+        rho = 1.0 + amplitude * np.cos(2.0 * np.pi * x)
+        fields = Fields(rho, np.zeros_like(rho), np.zeros_like(rho))
+        params = TonerTuParameters(
+            alpha=0.0,
+            beta=1.0,
+            sigma=1.0,
+            diffusion=0.0,
+            lambda_=0.0,
+        )
+
+        # dt decreases faster than dx, so temporal error is subdominant
+        # to the second-order centred spatial discretization.
+        dt = final_time / (nx * nx)
+        result = integrate(
+            fields, grid, params, dt=dt, n_steps=nx * nx
+        )
+
+        phase = 2.0 * np.pi * final_time
+        rho_exact = 1.0 + amplitude * np.cos(2.0 * np.pi * x) * np.cos(phase)
+        vx_exact = amplitude * np.sin(2.0 * np.pi * x) * np.sin(phase)
+        error = np.sqrt(np.mean(
+            ((result.rho - rho_exact) / amplitude) ** 2
+            + ((result.vx - vx_exact) / amplitude) ** 2
+        ))
+        errors.append(float(error))
+
+    assert errors[0] > errors[1] > errors[2]
+    assert errors[0] / errors[1] > 3.0
+    assert errors[1] / errors[2] > 3.0
