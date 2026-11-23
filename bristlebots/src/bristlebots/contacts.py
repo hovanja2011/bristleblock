@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 
 
-@dataclass
+@dataclass(frozen=True)
 class ContactParameters:
     normal_stiffness: float
     normal_damping: float
