@@ -13,10 +13,11 @@ class Grid:
     ly: float
 
     def __post_init__(self) -> None:
-        if self.nx < 2 or self.ny < 2:
-            raise ValueError("Grid dimensions must be at least 2.")
-        if self.lx <= 0 or self.ly <= 0:
-            raise ValueError("Domain lengths must be positive.")
+        if not isinstance(self.nx, int) or not isinstance(self.ny, int) or self.nx < 2 or self.ny < 2:
+            raise ValueError("Grid dimensions must be integers of at least 2.")
+        lengths = np.asarray([self.lx, self.ly], dtype=float)
+        if not np.isfinite(lengths).all() or np.any(lengths <= 0):
+            raise ValueError("Domain lengths must be finite and positive.")
 
     @property
     def dx(self) -> float:
@@ -51,6 +52,8 @@ class Fields:
     vy: npt.NDArray[np.float64]
 
     def __post_init__(self) -> None:
+        if any(not isinstance(a, np.ndarray) for a in (self.rho, self.vx, self.vy)):
+            raise TypeError("rho, vx and vy must be NumPy arrays.")
         if self.rho.ndim != 2:
             raise ValueError("Fields must be two-dimensional.")
         if self.rho.shape != self.vx.shape or self.rho.shape != self.vy.shape:
