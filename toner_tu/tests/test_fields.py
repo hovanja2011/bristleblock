@@ -54,3 +54,15 @@ def test_invalid_beta():
 def test_non_finite_parameters_are_rejected():
     with pytest.raises(ValueError):
         TonerTuParameters(alpha=np.nan, beta=1.0, sigma=1.0, diffusion=0.1)
+
+
+def test_initial_condition_builders_reject_non_finite_values():
+    from toner_tu.initial_conditions import uniform_state, random_velocity_state
+
+    grid = Grid(nx=4, ny=4, lx=1.0, ly=1.0)
+    with pytest.raises(ValueError):
+        uniform_state(grid, rho0=np.nan)
+    with pytest.raises(ValueError):
+        uniform_state(grid, vx0=np.inf)
+    with pytest.raises(ValueError):
+        random_velocity_state(grid, velocity_scale=np.nan)
