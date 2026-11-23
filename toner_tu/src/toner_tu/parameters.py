@@ -1,5 +1,6 @@
 """Physical coefficients of the simplified polar Toner–Tu model."""
 from dataclasses import dataclass
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -12,6 +13,9 @@ class TonerTuParameters:
     lambda_: float = 1.0
 
     def __post_init__(self) -> None:
+        values = np.asarray([self.alpha, self.beta, self.sigma, self.diffusion, self.lambda_], dtype=float)
+        if not np.isfinite(values).all():
+            raise ValueError("All Toner–Tu parameters must be finite.")
         if self.beta <= 0:
             raise ValueError("beta must be positive.")
         if self.sigma < 0:
