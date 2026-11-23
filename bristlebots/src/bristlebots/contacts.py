@@ -1,3 +1,4 @@
+"""Normal and tangential contact mechanics for robot-wall and robot-robot pairs."""
 from dataclasses import dataclass
 
 import numpy as np
