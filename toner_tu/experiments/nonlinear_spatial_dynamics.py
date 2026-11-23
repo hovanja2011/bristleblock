@@ -25,12 +25,12 @@ SEED = 42
 
 
 def initial_state(grid):
-    return random_velocity_state(grid, rho0=1.0, velocity_scale=0.25, seed=SEED)
+    return random_velocity_state(grid, rho0=1.0, velocity_scale=0.1, seed=SEED)
 
 
 def model_parameters():
-    return TonerTuParameters(alpha=1.0, beta=1.0, sigma=0.6,
-                             diffusion=0.08, lambda_=2.0)
+    return TonerTuParameters(alpha=1.0, beta=1.0, sigma=1.0,
+                             diffusion=0.5, lambda_=1.0)
 
 
 def run(dt, save_history=False):
