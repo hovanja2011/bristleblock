@@ -54,11 +54,11 @@ rounded corners, reconfigurable maze cells, or percolation geometries.
 
 ## Validation record
 
-GitHub Actions workflow run
-[45134256353](https://github.com/hovanja2011/bristleblock/actions/runs/45134256353)
-passed before the final analytic box-wave convergence test was added:
-33 Toner–Tu tests, 8 maze tests and 38 bristlebots tests (79 total).
-The final test suite must be re-run after this document and test are committed.
+Final GitHub Actions workflow run
+[45134972725](https://github.com/hovanja2011/bristleblock/actions/runs/45134972725)
+passed after the analytic box-wave convergence test was added:
+33 Toner–Tu tests, 9 maze tests and 38 bristlebots tests (80 total).
+All three project test commands completed successfully in CI.
 
 ## Explicitly deferred
 
