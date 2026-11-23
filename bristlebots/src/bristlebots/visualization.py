@@ -1,3 +1,4 @@
+"""Plots and animations for robot trajectories and angular motion."""
 
 import numpy as np
 import matplotlib.pyplot as plt
