@@ -127,3 +127,15 @@ def test_free_speed_is_defined_when_linear_drag_is_zero():
     unpowered = Robot((0.0, 0.0), (0.0, 0.0))
     assert np.isinf(driven.free_speed)
     assert unpowered.free_speed == 0.0
+
+
+def test_contact_parameters_are_immutable_after_validation():
+    parameters = ContactParameters(
+        normal_stiffness=100.0,
+        normal_damping=0.0,
+        mu_static=0.5,
+        mu_kinetic=0.3,
+        tangential_stiffness=10.0,
+    )
+    with pytest.raises(AttributeError):
+        parameters.normal_stiffness = -1.0
