@@ -1,3 +1,4 @@
+"""Geometric primitives used to represent fixed physical walls."""
 
 import numpy as np
 
