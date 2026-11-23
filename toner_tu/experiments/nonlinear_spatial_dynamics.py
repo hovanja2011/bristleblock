@@ -19,8 +19,8 @@ from toner_tu.parameters import TonerTuParameters
 from toner_tu.solver import integrate
 from toner_tu.visualization import animate_fields_with_vorticity
 
-GRID_N, DOMAIN_LENGTH, FINAL_TIME = 48, 24.0, 1.0
-DT_VALUES = (0.004, 0.002, 0.001, 0.0005)
+GRID_N, DOMAIN_LENGTH, FINAL_TIME = 48, 24.0, 0.5
+DT_VALUES = (0.002, 0.001, 0.0005, 0.00025)
 SEED = 42
 
 
@@ -29,8 +29,8 @@ def initial_state(grid):
 
 
 def model_parameters():
-    return TonerTuParameters(alpha=1.0, beta=1.0, sigma=1.0,
-                             diffusion=0.5, lambda_=1.0)
+    return TonerTuParameters(alpha=1.0, beta=1.0, sigma=0.6,
+                             diffusion=0.08, lambda_=2.0)
 
 
 def run(dt, save_history=False):
@@ -93,6 +93,11 @@ def main():
 
     sample, grid, _, history = run(DT_VALUES[2], save_history=True)
     omega = vorticity(sample.vx, sample.vy, grid)
+    initial_omega = vorticity(history["vx"][0], history["vy"][0], grid)
+    initial_omega_rms = float(np.sqrt(np.mean(initial_omega**2)))
+    final_omega_rms = float(np.sqrt(np.mean(omega**2)))
+    initial_enstrophy = float(0.5*np.mean(initial_omega**2))
+    final_enstrophy = float(0.5*np.mean(omega**2))
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
     axes[0].imshow(np.sqrt(sample.vx**2+sample.vy**2), origin="lower",
                    extent=(0, grid.lx, 0, grid.ly), aspect="equal")
@@ -131,6 +136,9 @@ def main():
         print(f'{row["dt"]:.6g}, {row["relative_error_to_finest_dt"]:.6e}, '
               f'{row["polarization"]:.6e}, {row["vorticity_rms"]:.6e}, '
               f'{row["enstrophy"]:.6e}')
+    print(f"Initial vorticity RMS/enstrophy: {initial_omega_rms:.6e}, {initial_enstrophy:.6e}")
+    print(f"Final vorticity RMS/enstrophy:   {final_omega_rms:.6e}, {final_enstrophy:.6e}")
+    print(f"Vorticity RMS amplification:     {final_omega_rms/initial_omega_rms:.6e}")
     print(f"Saved nonlinear spatial diagnostics in {output}")
 
 
