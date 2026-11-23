@@ -1,3 +1,4 @@
+"""Plotting and animation helpers for continuum density and velocity fields."""
 
 import numpy as np
 import matplotlib.pyplot as plt
