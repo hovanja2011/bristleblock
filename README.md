@@ -32,7 +32,10 @@ Run the full validation and visualization suite:
 python experiments/run_validation_suite.py
 ~~~
 
-This opens Matplotlib plots and interactive animations. The bristlebots collision studies show robot trajectories and contact diagnostics; the nonlinear Toner–Tu run animates density, velocity and vorticity. The maze experiment plots the rounded obstacle mask and grid-refinement error.
+This opens Matplotlib plots and interactive animations. The bristlebots contact
+study displays stiffness/friction sweeps; the nonlinear Toner–Tu run animates
+density, velocity and vorticity. The maze experiment plots rounded obstacles
+and the geometric grid-refinement error.
 
 For a non-interactive run that only writes files:
 
@@ -40,7 +43,9 @@ For a non-interactive run that only writes files:
 python experiments/run_validation_suite.py --no-show
 ~~~
 
-All CSV tables and PNG figures are written to results/validation/. The combined summary is summary.csv. GitHub Actions uploads the same directory as the validation-results artifact.
+All CSV tables and PNG figures are written to results/validation/. The combined
+summary is summary.csv. GitHub Actions uploads the same directory as the
+validation-results artifact.
 
 Run one experiment by itself:
 
@@ -52,16 +57,16 @@ python mazes/experiments/rounded_obstacle_validation.py
 
 Every experiment accepts --output-dir PATH and --no-show.
 
-## Maze geometry example
+## Rounded maze geometry example
 
 ~~~python
-from mazes import MazeGeometry, CircleObstacle, RoundedSegment
+from mazes import MazeGeometry, CircleObstacle, RoundedPolyline
 
 maze = MazeGeometry(
     width=20.0, height=12.0,
     obstacles=(
-        RoundedSegment((4.0, 3.0), (16.0, 3.0), radius=0.25),
-        CircleObstacle((10.0, 7.0), radius=1.0),
+        RoundedPolyline(((4.0, 3.0), (12.0, 3.0), (12.0, 9.0)), radius=0.25),
+        CircleObstacle((16.0, 7.0), radius=1.0),
     ),
 )
 grid = maze.grid(200, 120)

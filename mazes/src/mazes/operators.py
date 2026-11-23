@@ -33,15 +33,24 @@ class MazeDomainOperators:
     def _neighbor(self, field, dy, dx):
         neighbour = np.roll(field, shift=(-dy, -dx), axis=(0, 1))
         solid_neighbour = np.roll(self._solid, shift=(-dy, -dx), axis=(0, 1))
+        x, y = self.grid.coordinates()
         if dx == 1:
             neighbour[:, -1], solid_neighbour[:, -1] = field[:, -1], True
+            face_x = np.broadcast_to((np.arange(self.grid.nx)+1)*self.grid.dx, field.shape)
+            blocked_face = self.geometry.signed_distance(face_x, y) <= 0.0
         elif dx == -1:
             neighbour[:, 0], solid_neighbour[:, 0] = field[:, 0], True
-        if dy == 1:
+            face_x = np.broadcast_to(np.arange(self.grid.nx)*self.grid.dx, field.shape)
+            blocked_face = self.geometry.signed_distance(face_x, y) <= 0.0
+        elif dy == 1:
             neighbour[-1, :], solid_neighbour[-1, :] = field[-1, :], True
-        elif dy == -1:
+            face_y = np.broadcast_to(((np.arange(self.grid.ny)+1)*self.grid.dy)[:, None], field.shape)
+            blocked_face = self.geometry.signed_distance(x, face_y) <= 0.0
+        else:
             neighbour[0, :], solid_neighbour[0, :] = field[0, :], True
-        return np.where(solid_neighbour, field, neighbour)
+            face_y = np.broadcast_to((np.arange(self.grid.ny)*self.grid.dy)[:, None], field.shape)
+            blocked_face = self.geometry.signed_distance(x, face_y) <= 0.0
+        return np.where(solid_neighbour | blocked_face, field, neighbour)
     def gradient(self, field, grid):
         self._check(field, "field")
         if grid != self.grid:
@@ -88,8 +97,14 @@ class MazeDomainOperators:
             raise ValueError("Density must be non-negative.")
         ny, nx = rho.shape
         u_face, v_face = np.zeros((ny, nx+1)), np.zeros((ny+1, nx))
-        fluid_x = ~(self._solid[:, :-1] | self._solid[:, 1:])
-        fluid_y = ~(self._solid[:-1, :] | self._solid[1:, :])
+        x_face = np.broadcast_to((np.arange(nx+1)*grid.dx)[None, :], (ny, nx+1))
+        y_face = np.broadcast_to((np.arange(ny+1)*grid.dy)[:, None], (ny+1, nx))
+        _, y_centres = grid.coordinates()
+        x_centres, _ = grid.coordinates()
+        obstacle_x = self.geometry.signed_distance(x_face[:, 1:-1], y_centres) <= 0.0
+        obstacle_y = self.geometry.signed_distance(x_centres, y_face[1:-1, :]) <= 0.0
+        fluid_x = ~(self._solid[:, :-1] | self._solid[:, 1:] | obstacle_x)
+        fluid_y = ~(self._solid[:-1, :] | self._solid[1:, :] | obstacle_y)
         u_face[:, 1:-1] = np.where(fluid_x, 0.5*(vx[:, :-1]+vx[:, 1:]), 0.0)
         v_face[1:-1, :] = np.where(fluid_y, 0.5*(vy[:-1, :]+vy[1:, :]), 0.0)
         flux_x, flux_y = np.zeros_like(u_face), np.zeros_like(v_face)
