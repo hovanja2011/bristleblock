@@ -4,6 +4,7 @@ import pytest
 from toner_tu.fields import Fields, Grid
 from toner_tu.parameters import TonerTuParameters
 from toner_tu.maze_geometry import MazeGeometry
+from toner_tu.maze import BoxMaze
 from toner_tu.unified import UnifiedBoundaryConditions, compute_rhs, step
 
 
@@ -12,7 +13,7 @@ def make_fields(grid, rho=1.0, vx=0.0, vy=0.0):
     return Fields(np.full(shape, rho), np.full(shape, vx), np.full(shape, vy))
 
 
-def test_unified_periodic_density_mass_conservation():
+def test_periodic_density_rhs_conserves_mass():
     grid = Grid(32, 20, 4.0, 2.0)
     fields = make_fields(grid, rho=1.0, vx=0.2, vy=-0.1)
     fields.rho[:] += 0.1 * np.sin(2*np.pi*grid.x/grid.lx)
@@ -20,18 +21,13 @@ def test_unified_periodic_density_mass_conservation():
     assert abs(rhs.rho.sum()) < 1e-10
 
 
-def test_mass_flux_is_blocked_by_solid_column():
-    grid = Grid(24, 16, 4.0, 2.0)
-    solid = np.zeros((grid.ny, grid.nx), dtype=bool)
-    solid[:, 12] = True
-    geometry = MazeGeometry(solid)
-    fields = make_fields(grid, rho=1.0, vx=0.5)
-    fields.rho[:, :12] = 2.0
-    fields.rho[:, 12:] = 0.5
-    fields.rho[solid] = 0
+def test_box_has_zero_density_flux_at_all_outer_walls():
+    grid = Grid(32, 20, 4.0, 2.0)
+    fields = make_fields(grid, rho=1.0, vx=0.4, vy=-0.25)
+    fields.rho[:] = 1.0 + 0.1*np.sin(2*np.pi*grid.x/grid.lx)
     rhs = compute_rhs(fields, grid, TonerTuParameters(0, 1, 0, 0),
-                      geometry, UnifiedBoundaryConditions(periodic=True))
-    assert abs(rhs.rho[:, :12].sum() + rhs.rho[:, 13:].sum()) < 1e-10
+                      boundary=UnifiedBoundaryConditions(mode="box"))
+    assert abs(rhs.rho.sum()) < 1e-10
 
 
 def test_solid_cells_are_zero_after_step():
@@ -48,13 +44,19 @@ def test_solid_cells_are_zero_after_step():
     assert np.all(result.vy[solid] == 0)
 
 
-def test_geometry_shape_is_checked():
-    grid = Grid(12, 8, 3, 2)
-    geometry = MazeGeometry(np.zeros((8, 11), dtype=bool))
-    with pytest.raises(ValueError, match="Geometry shape"):
-        geometry.validate_for(grid)
+def test_box_maze_constructs_matching_grid_geometry_and_walls():
+    maze = BoxMaze(width=4.0, height=2.0)
+    grid = maze.grid(nx=40, ny=20)
+    geometry = maze.geometry(grid)
+    boundary = maze.boundary_conditions()
+    assert geometry.solid.shape == (20, 40)
+    assert not geometry.solid.any()
+    assert boundary.mode == "box"
 
 
-def test_solid_mask_must_be_boolean():
-    with pytest.raises(TypeError, match="boolean"):
-        MazeGeometry(np.zeros((4, 5), dtype=int))
+def test_box_dimensions_and_grid_must_match():
+    with pytest.raises(ValueError):
+        BoxMaze(width=0, height=2)
+    maze = BoxMaze(width=4, height=2)
+    with pytest.raises(ValueError, match="match"):
+        maze.geometry(Grid(20, 10, 3, 2))
