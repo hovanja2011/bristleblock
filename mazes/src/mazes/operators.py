@@ -101,8 +101,12 @@ class MazeDomainOperators:
         y_face = np.broadcast_to((np.arange(ny+1)*grid.dy)[:, None], (ny+1, nx))
         _, y_centres = grid.coordinates()
         x_centres, _ = grid.coordinates()
-        obstacle_x = self.geometry.signed_distance(x_face[:, 1:-1], y_centres) <= 0.0
-        obstacle_y = self.geometry.signed_distance(x_centres, y_face[1:-1, :]) <= 0.0
+        x_face_interior = x_face[:, 1:-1]
+        y_at_x_faces = np.broadcast_to(y_centres[:, :1], x_face_interior.shape)
+        y_face_interior = y_face[1:-1, :]
+        x_at_y_faces = np.broadcast_to(x_centres[:1, :], y_face_interior.shape)
+        obstacle_x = self.geometry.signed_distance(x_face_interior, y_at_x_faces) <= 0.0
+        obstacle_y = self.geometry.signed_distance(x_at_y_faces, y_face_interior) <= 0.0
         fluid_x = ~(self._solid[:, :-1] | self._solid[:, 1:] | obstacle_x)
         fluid_y = ~(self._solid[:-1, :] | self._solid[1:, :] | obstacle_y)
         u_face[:, 1:-1] = np.where(fluid_x, 0.5*(vx[:, :-1]+vx[:, 1:]), 0.0)
