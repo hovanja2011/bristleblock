@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - unified-toner-tu-maze
+      - stage1-physics-audit
   pull_request:
   workflow_dispatch:
 
