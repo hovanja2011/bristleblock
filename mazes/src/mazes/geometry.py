@@ -3,11 +3,13 @@ from dataclasses import dataclass
 import numpy as np
 from toner_tu.fields import Grid
 
+
 def _point(value, name):
     point = np.asarray(value, dtype=float)
     if point.shape != (2,) or not np.isfinite(point).all():
         raise ValueError(f"{name} must be a finite 2D point.")
     return tuple(float(v) for v in point)
+
 
 @dataclass(frozen=True)
 class CircleObstacle:
@@ -19,7 +21,8 @@ class CircleObstacle:
         if not np.isfinite(self.radius) or self.radius <= 0.0:
             raise ValueError("Obstacle radius must be finite and positive.")
     def signed_distance(self, x, y):
-        return np.hypot(x - self.center[0], y - self.center[1]) - self.radius
+        return np.hypot(x-self.center[0], y-self.center[1])-self.radius
+
 
 @dataclass(frozen=True)
 class RoundedSegment:
@@ -32,18 +35,47 @@ class RoundedSegment:
         object.__setattr__(self, "end", _point(self.end, "end"))
         if not np.isfinite(self.radius) or self.radius <= 0.0:
             raise ValueError("Wall half-thickness must be finite and positive.")
-        if np.linalg.norm(np.asarray(self.end) - np.asarray(self.start)) <= 0.0:
+        if np.linalg.norm(np.asarray(self.end)-np.asarray(self.start)) <= 0.0:
             raise ValueError("RoundedSegment endpoints must be distinct.")
     def signed_distance(self, x, y):
-        ax, ay = self.start
-        bx, by = self.end
-        dx, dy = bx - ax, by - ay
-        projection = np.clip(((x - ax)*dx + (y - ay)*dy)/(dx*dx + dy*dy), 0.0, 1.0)
-        return np.hypot(x - (ax + projection*dx), y - (ay + projection*dy)) - self.radius
+        return _segment_distance(x, y, self.start, self.end)-self.radius
+
+
+def _segment_distance(x, y, start, end):
+    ax, ay = start
+    bx, by = end
+    dx, dy = bx-ax, by-ay
+    projection = np.clip(((x-ax)*dx+(y-ay)*dy)/(dx*dx+dy*dy), 0.0, 1.0)
+    return np.hypot(x-(ax+projection*dx), y-(ay+projection*dy))
+
+
+@dataclass(frozen=True)
+class RoundedPolyline:
+    """Rounded wall centreline: union of capsules along a polyline.
+
+    A bend is rounded by the disk-radius Minkowski thickening of its vertex;
+    this avoids a sharp zero-radius corner in the solid-wall geometry.
+    """
+    points: tuple
+    radius: float
+    def __post_init__(self):
+        points = tuple(_point(p, "polyline point") for p in self.points)
+        if len(points) < 2:
+            raise ValueError("RoundedPolyline requires at least two points.")
+        if any(np.linalg.norm(np.asarray(b)-np.asarray(a)) <= 0.0
+               for a, b in zip(points[:-1], points[1:])):
+            raise ValueError("Consecutive polyline points must be distinct.")
+        if not np.isfinite(self.radius) or self.radius <= 0.0:
+            raise ValueError("Wall half-thickness must be finite and positive.")
+        object.__setattr__(self, "points", points)
+    def signed_distance(self, x, y):
+        distances = [_segment_distance(x, y, a, b) for a, b in zip(self.points[:-1], self.points[1:])]
+        return np.minimum.reduce(distances)-self.radius
+
 
 @dataclass(frozen=True)
 class MazeGeometry:
-    """Rectangular container with analytic circular and rounded-segment solids."""
+    """Rectangular container with analytic circular and rounded wall solids."""
     width: float
     height: float
     obstacles: tuple = ()
@@ -52,8 +84,9 @@ class MazeGeometry:
         if not np.isfinite(dimensions).all() or np.any(dimensions <= 0.0):
             raise ValueError("Maze dimensions must be finite and positive.")
         object.__setattr__(self, "obstacles", tuple(self.obstacles))
-        if not all(isinstance(o, (CircleObstacle, RoundedSegment)) for o in self.obstacles):
-            raise TypeError("Obstacles must be CircleObstacle or RoundedSegment instances.")
+        valid = (CircleObstacle, RoundedSegment, RoundedPolyline)
+        if not all(isinstance(o, valid) for o in self.obstacles):
+            raise TypeError("Unsupported obstacle geometry.")
     def grid(self, nx: int, ny: int) -> Grid:
         return Grid(nx=nx, ny=ny, lx=self.width, ly=self.height)
     def signed_distance(self, x, y):

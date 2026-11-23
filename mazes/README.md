@@ -1,20 +1,23 @@
 # Maze geometry and boundary operators
 
 The maze package owns physical domains, internal obstacles and boundary-specific
-numerical operators. It provides BoxMaze, CircleObstacle, RoundedSegment
-(finite-thickness segment with circular end caps), MazeGeometry, and
-MazeDomainOperators.
+numerical operators. It provides BoxMaze, CircleObstacle, RoundedSegment,
+RoundedPolyline, MazeGeometry, and MazeDomainOperators.
+
+RoundedPolyline describes a wall centreline with finite thickness. Its
+signed-distance geometry is the union of capsules along the path, so bends
+are thickened by a disk and do not have sharp zero-radius corners.
 
 Example:
 
 ~~~python
-from mazes import MazeGeometry, CircleObstacle, RoundedSegment
+from mazes import MazeGeometry, CircleObstacle, RoundedPolyline
 
 maze = MazeGeometry(
     width=20.0, height=12.0,
     obstacles=(
-        RoundedSegment((4.0, 3.0), (16.0, 3.0), radius=0.25),
-        CircleObstacle((10.0, 7.0), radius=1.0),
+        RoundedPolyline(((4.0, 3.0), (12.0, 3.0), (12.0, 9.0)), radius=0.25),
+        CircleObstacle((16.0, 7.0), radius=1.0),
     ),
 )
 grid = maze.grid(200, 120)

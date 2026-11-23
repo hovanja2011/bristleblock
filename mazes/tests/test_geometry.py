@@ -1,7 +1,7 @@
 """Tests for analytic rounded obstacles and conservative no-flux operators."""
 import numpy as np
 import pytest
-from mazes import CircleObstacle, MazeGeometry, RoundedSegment
+from mazes import CircleObstacle, MazeGeometry, RoundedPolyline, RoundedSegment
 from toner_tu.initial_conditions import uniform_state
 from toner_tu.parameters import TonerTuParameters
 from toner_tu.solver import integrate
@@ -18,6 +18,12 @@ def test_rounded_segment_has_circular_end_caps():
     assert wall.signed_distance(1.0, 2.0) == pytest.approx(-0.25)
     assert wall.signed_distance(1.0, 2.25) == pytest.approx(0.0)
     assert wall.signed_distance(0.75, 2.0) == pytest.approx(0.0)
+
+def test_rounded_polyline_rounds_a_right_angle_bend():
+    wall = RoundedPolyline(((1.0, 1.0), (3.0, 1.0), (3.0, 3.0)), 0.2)
+    assert wall.signed_distance(3.1, 1.1) < 0.0
+    assert wall.signed_distance(3.2, 1.2) > 0.0
+    assert wall.signed_distance(3.0, 1.0) == pytest.approx(-0.2)
 
 def test_maze_mask_and_flux_are_impermeable_and_mass_conservative():
     geometry = MazeGeometry(4.0, 3.0, obstacles=(
