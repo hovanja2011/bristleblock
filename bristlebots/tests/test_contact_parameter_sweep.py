@@ -1,5 +1,12 @@
 """Regression checks for the contact stiffness/friction parameter study."""
-from bristlebots.experiments.contact_parameter_sweep import run_case
+import importlib.util
+from pathlib import Path
+
+SCRIPT = Path(__file__).parents[1] / "experiments" / "contact_parameter_sweep.py"
+SPEC = importlib.util.spec_from_file_location("contact_parameter_sweep", SCRIPT)
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
+run_case = MODULE.run_case
 
 
 def test_penalty_overlap_decreases_when_normal_stiffness_increases():
@@ -17,7 +24,7 @@ def test_friction_changes_rotation_and_preserves_pair_invariants():
     assert frictional["tangential_impulse"] > 0.0
 
 
-def test_time_refinement_diagnostics_are_finite():
+def test_contact_metrics_are_finite_and_dt_is_positive():
     result = run_case(2000.0, 0.3)
     assert result["dt"] > 0.0
     assert result["max_overlap"] > 0.0

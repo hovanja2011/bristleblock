@@ -1,78 +1,79 @@
 # Bristlebot and active-matter research code
 
-The repository is split into three projects with deliberately separate roles:
+The repository contains three cooperating Python projects:
 
-1. **bristlebots/** — discrete robot mechanics, contacts, and particle-level experiments.
-2. **toner_tu/** — continuum Toner–Tu active-matter fields, equations, and time integration.
-3. **mazes/** — spatial domains, maze geometry, and boundary-specific numerical operators.
+- **bristlebots/** — discrete rigid-body dynamics, propulsion and contact mechanics.
+- **toner_tu/** — continuum Toner–Tu active-matter equations and time integration.
+- **mazes/** — rectangular domains, internal obstacles and boundary-aware spatial operators.
 
-The Toner–Tu equation implementation depends on a small DomainOperators
-interface. This keeps physical constitutive equations independent from the
-shape of the computational domain. The mazes project supplies concrete
-implementations; its first geometry is a rectangular closed box.
+## Install
 
-## Installation
-
-Use Python 3.10 or newer. From the repository root:
+Use Python 3.10 or newer, from the repository root:
 
 ~~~bash
-python -m pip install -e "./toner_tu[viz]"
+python -m pip install -e "./toner_tu[viz,test]"
 python -m pip install -e "./mazes"
-python -m pip install -e "./bristlebots"
+python -m pip install -e "./bristlebots[test]"
 ~~~
 
-The viz extra installs Matplotlib for plots and animations. The bristlebots
-package already depends on Matplotlib.
-
-## Run tests
+## Test
 
 ~~~bash
-python -m pytest bristlebots/tests
 python -m pytest toner_tu/tests
 python -m pytest mazes/tests
+python -m pytest bristlebots/tests
 ~~~
 
-## Run and visualize the models
+## Run models and view experiments
 
-Run the full reproducible validation suite with interactive plots and
-animations:
+Run the full validation and visualization suite:
 
 ~~~bash
 python experiments/run_validation_suite.py
 ~~~
 
-For a headless run that writes tables and PNG figures without opening windows:
+This opens Matplotlib plots and interactive animations. The bristlebots collision studies show robot trajectories and contact diagnostics; the nonlinear Toner–Tu run animates density, velocity and vorticity. The maze experiment plots the rounded obstacle mask and grid-refinement error.
+
+For a non-interactive run that only writes files:
 
 ~~~bash
 python experiments/run_validation_suite.py --no-show
 ~~~
 
-Generated results are written to results/validation/: per-experiment CSV
-tables, PNG plots, a combined summary.csv, and a short README describing the
-artifacts. A successful GitHub Actions run also publishes the folder as the
-validation-results artifact, available from the run's Artifacts section.
+All CSV tables and PNG figures are written to results/validation/. The combined summary is summary.csv. GitHub Actions uploads the same directory as the validation-results artifact.
 
-Individual scripts can also be run separately:
+Run one experiment by itself:
 
 ~~~bash
-python bristlebots/experiments/free_motion_validation.py
-python bristlebots/experiments/rotational_validation.py
-python bristlebots/experiments/head_on_collision_validation.py
-python bristlebots/experiments/oblique_collision_validation.py
-python toner_tu/experiments/periodic_acoustic_convergence.py
-python toner_tu/experiments/damped_acoustic_mode.py
-python toner_tu/experiments/nonlinear_ordering_validation.py
+python bristlebots/experiments/contact_parameter_sweep.py
+python toner_tu/experiments/nonlinear_spatial_dynamics.py
+python mazes/experiments/rounded_obstacle_validation.py
 ~~~
 
-Interactive experiments open Matplotlib figures; the bristlebots rotation and
-collision experiments and the Toner–Tu acoustic modes also show animations.
-Every script accepts --output-dir PATH and --no-show.
+Every experiment accepts --output-dir PATH and --no-show.
 
-The numerical curves are compared with analytical solutions or explicitly
-identified hard-contact reference limits. Convergence tables report errors
-and observed orders; conservation diagnostics are reported separately.
-Successful benchmark tests validate only their stated setup and parameter
-regime, not the entire physical model or agreement with laboratory data.
+## Maze geometry example
 
-See ARCHITECTURE.md, STAGE1_AUDIT.md, and STAGE2_VALIDATION.md for design,
-scope, assumptions, and interpretation.
+~~~python
+from mazes import MazeGeometry, CircleObstacle, RoundedSegment
+
+maze = MazeGeometry(
+    width=20.0, height=12.0,
+    obstacles=(
+        RoundedSegment((4.0, 3.0), (16.0, 3.0), radius=0.25),
+        CircleObstacle((10.0, 7.0), radius=1.0),
+    ),
+)
+grid = maze.grid(200, 120)
+operators = maze.operators(grid)
+fields = operators.mask_fields(fields)
+result = integrate(fields, grid, parameters, dt=1e-3, n_steps=1000,
+                   domain=operators)
+~~~
+
+The maze boundary operators conserve density and block flux through internal
+solid faces. Rounded shapes are analytically defined but currently represented
+by a grid-resolved Cartesian mask, not a high-order cut-cell boundary method.
+
+See ARCHITECTURE.md, STAGE1_AUDIT.md, and STAGE2_VALIDATION.md for model
+assumptions, numerical scope and known limitations.

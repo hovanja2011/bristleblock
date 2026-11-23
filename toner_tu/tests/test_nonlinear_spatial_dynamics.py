@@ -1,5 +1,6 @@
 """Smoke and invariant tests for nonlinear spatial Toner–Tu dynamics."""
 import numpy as np
+import pytest
 
 from toner_tu.diagnostics import total_mass
 from toner_tu.fields import Grid
@@ -24,6 +25,3 @@ def test_nonlinear_spatial_run_remains_finite_and_mass_conservative():
     assert result.rho.min() > 0.0
     assert total_mass(result, grid) == pytest.approx(initial_mass, abs=1e-10)
     assert np.sqrt(np.mean(vorticity(result.vx, result.vy, grid)**2)) > 0.0
-
-
-import pytest

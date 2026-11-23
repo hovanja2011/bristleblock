@@ -1,87 +1,55 @@
-# Stage 2 — reproducible verification and visualization
+# Numerical verification and geometry validation
 
-Status: the full validation suite passes in GitHub Actions. Run #22 produced the numerical results summarized below. Run #23 reran all three test groups and all seven quantitative experiment scripts, then uploaded the CSV tables and PNG figures as the validation-results workflow artifact.
+## Evidence levels
 
-## Keep three kinds of evidence separate
+1. **Code verification:** automated tests establish implementation properties.
+2. **Numerical verification:** refinement and conservation studies quantify error for specified equations, geometries and parameters.
+3. **Experimental validation:** comparison with physical bristlebots data. Such a dataset is not yet part of this repository.
 
-1. **Code verification:** tests establish that implementation behaves as specified.
-2. **Numerical verification:** refinement studies quantify discretization error and observed convergence for a defined problem.
-3. **Experimental validation:** comparison with physical bristlebots data; this repository does not yet provide that dataset.
+## Bristlebots
 
-## Bristlebots benchmarks
+The free translation, active rotation and head-on damped-contact benchmarks compare against continuous analytical solutions. The oblique frictionless collision compares final velocities with the ideal elastic hard-disk collision map; the compliant trajectory is not claimed to be identical to a hard-contact path.
 
-### Free translation with linear drag
-The free-motion experiment compares position and velocity with the exact solution of
-\(m\dot v_x=F-\gamma v_x\), \(m\dot v_y=-\gamma v_y\).
-The semi-implicit Euler integrator is expected to converge globally at first order.
+The contact-parameter sweep varies normal stiffness and static/kinetic friction. It reports maximum overlap, normal/tangential impulse, contact mode counts, final spin, energy loss, momentum/angular-momentum drift and the change under a halved time step. The stiffness study is essential because reducing dt does not remove penalty deformation. Frictional oblique contact has no single closed-form trajectory for the implemented history-dependent Cundall–Strack law; these are controlled parameter studies, not analytical benchmarks.
 
-### Active rotation with rotational drag
-The rotational experiment compares angular velocity and angle with the exact solution of
-\(I\dot\omega=\tau-\gamma_r\omega\), \(\dot\theta=\omega\).
-The propulsion force acts through the centre of mass; this benchmark isolates the independent active torque.
+## Toner–Tu
 
-### Head-on damped collision
-The head-on experiment begins at first contact with zero overlap and no tangential friction. The normal overlap obeys
-\(m_{\rm eff}\ddot\delta+c_n\dot\delta+k_n\delta=0\), with \(m_{\rm eff}=m/2\).
-It compares overlap, overlap rate and centre positions with the underdamped analytical solution before separation.
+The linear acoustic and damped Fourier-mode experiments use analytical continuum references. The homogeneous cubic ordering experiment has an exact logistic speed solution, but it does not test spatial nonlinearities.
 
-### Oblique frictionless collision
-The oblique experiment compares final velocities with the exact elastic hard-disk collision map and reports linear momentum, kinetic energy, angular momentum and maximum penalty overlap. The compliant finite-stiffness trajectory is not an exact hard-contact trajectory; the output is a time-step refinement and conservation diagnostic at fixed stiffness.
+The nonlinear spatial experiment starts from seeded random velocity perturbations and evolves the full periodic Toner–Tu equations. It records density, polarization, mean speed, vorticity RMS and enstrophy, and compares final fields across time-step refinements against the finest run. Interactive animations display density, velocity arrows and vorticity. This is a nonlinear numerical convergence study, not an analytical solution. Vortex emergence depends on the parameter regime and should be judged from the recorded fields and diagnostics rather than assumed from the script name.
 
-## Toner–Tu benchmarks
+## Maze geometry and internal walls
 
-### Periodic undamped acoustic mode
-The periodic acoustic experiment compares a small-amplitude Fourier mode with the continuum linear acoustic solution.
+MazeGeometry supports circular obstacles and finite-thickness rounded segments (capsules with circular end caps). MazeDomainOperators blocks density flux across every face adjacent to a solid cell, including internal obstacles, and conserves the discrete total mass. The validation experiment compares the represented solid area with the exact area of the circle-plus-capsule geometry over grid refinement and measures mass drift during transport.
 
-### Periodic damped acoustic mode
-The damped acoustic experiment includes velocity diffusion. Reference amplitudes are obtained from the exact matrix exponential of the continuum linearized Fourier-mode system. The finite-difference solver is compared at a fixed physical time over grid refinement.
+Important limitation: obstacle shapes are defined analytically by signed-distance functions but sampled on a Cartesian cell-centred mask. Thus the boundary is staircase-resolved at the grid scale; this is not a cut-cell, immersed-boundary or high-order curved-wall method. Velocity diffusion uses a free-slip-like zero-normal-gradient mask closure. Results close to curved boundaries require grid-refinement checks.
 
-### Nonlinear homogeneous ordering
-The nonlinear ordering experiment isolates the full cubic local term
-\(\dot v=(\alpha-\beta |v|^2)v\) in a spatially uniform state. The exact solution is logistic in \(|v|^2\). This is a nonlinear local-saturation benchmark, **not** a test of nonlinear spatial pattern formation, vortices or nonlinear transport.
+## Reproducible commands
 
-## Results from CI run #22
-
-The following are measured results from the reproducible run, not estimates:
-
-| Benchmark | Refinement result |
-|---|---|
-| Free translation | Position and velocity errors decrease by approximately 2 when dt is halved (first order). |
-| Active rotation | Angle and angular-velocity errors show order 1.00–1.02. |
-| Head-on damped collision | Overlap and position errors show order about 1.05–1.27; overlap-rate error is approximately first order. |
-| Oblique frictionless collision | Final-velocity error falls from \(7.95\\times10^{-5}\) to \(9.89\\times10^{-7}\) over an 8-fold dt reduction; total momentum and angular-momentum drifts remain near floating-point roundoff. |
-| Undamped acoustic mode | Spatial order 1.99–2.00. |
-| Damped acoustic mode | Spatial order 2.00. |
-| Nonlinear homogeneous ordering | Time order 2.97–3.05, consistent with SSP-RK3. |
-
-**Contact-overlap warning:** in the oblique-collision run, maximum overlap is approximately \(1.581\\times10^{-2}\), or 3.16% of the robot radius, at the chosen normal stiffness \(k_n=2000\). It remains nearly constant under dt refinement. This is expected: reducing dt controls temporal error but does not remove finite penalty deformation. A separate stiffness-refinement study is required before treating the compliant contact as a sufficiently accurate hard-disk approximation.
-
-## Reproducibility and outputs
-
-From the repository root:
+Install all three projects:
 
 ~~~bash
-python -m pip install -e "./toner_tu[viz]"
+python -m pip install -e "./toner_tu[viz,test]"
 python -m pip install -e "./mazes"
-python -m pip install -e "./bristlebots"
+python -m pip install -e "./bristlebots[test]"
+~~~
+
+Run tests:
+
+~~~bash
+python -m pytest toner_tu/tests
+python -m pytest mazes/tests
+python -m pytest bristlebots/tests
+~~~
+
+Run the full experiment suite with interactive plots and animations:
+
+~~~bash
 python experiments/run_validation_suite.py
 ~~~
 
-Use --no-show for headless runs. Results are written to results/validation:
-CSV error tables, PNG plots, and a combined summary.csv. Individual scripts
-accept --output-dir PATH and --no-show. GitHub Actions uploads the same output
-directory as the validation-results artifact after a successful run.
+Use --no-show for headless runs. CSV and PNG outputs are written to results/validation. Individual scripts accept --output-dir PATH and --no-show.
 
-The interactive animation is generated from sampled numerical states; the
-quantitative plots overlay the analytical solution or clearly identified
-reference. Animations are qualitative visualizations; error tables are the
-quantitative comparison.
+## Interpretation
 
-## Limitations and interpretation
-
-- Translation, rotation and head-on normal-contact benchmarks compare with continuous analytical solutions; semi-implicit Euler shows first-order global convergence.
-- The oblique-collision benchmark uses the ideal elastic collision map as a final-state reference and separately monitors conserved quantities. It does not claim that finite penalty stiffness reproduces a hard-contact path exactly.
-- The Toner–Tu damped-mode benchmark checks a linearized Fourier mode with a small perturbation. The nonlinear benchmark checks only homogeneous cubic saturation.
-- Nonlinear spatial Toner–Tu regimes still need separate verification, ideally with manufactured solutions or a trusted independent high-resolution reference.
-- Maze geometry remains a rectangular closed box. Internal obstacles and rounded walls belong to a later geometry stage.
-- None of these benchmarks constitutes validation against physical bristlebots experiments.
+The new checks close the requested numerical-verification gaps for contact parameter dependence, nonlinear spatial evolution and rounded internal obstacle masks. They do not constitute experimental validation of the bristlebots model, do not prove convergence of Toner–Tu vortex statistics in the thermodynamic limit, and do not yet provide sub-grid accurate curved-wall hydrodynamics.
