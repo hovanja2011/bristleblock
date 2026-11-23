@@ -82,3 +82,35 @@ def test_integrate_automatically_substeps_large_requested_interval(grid, params)
     assert np.isfinite(result.rho).all()
     assert np.isfinite(result.vx).all()
     assert np.isfinite(result.vy).all()
+
+
+def test_periodic_acoustic_mode_does_not_gain_energy_from_time_integrator():
+    """Centred periodic acoustic modes must not be amplified by time stepping."""
+    grid = Grid(nx=64, ny=8, lx=1.0, ly=1.0)
+    x, _ = grid.coordinates()
+    rho0 = 1.0
+    perturbation = 1e-6
+    rho = rho0 + perturbation * np.cos(2.0 * np.pi * x)
+    fields = Fields(rho, np.zeros_like(rho), np.zeros_like(rho))
+    params = TonerTuParameters(
+        alpha=0.0,
+        beta=1.0,
+        sigma=1.0,
+        diffusion=0.0,
+        lambda_=0.0,
+    )
+
+    def acoustic_energy(state):
+        density_perturbation = state.rho - rho0
+        return 0.5 * float(np.mean(
+            params.sigma * density_perturbation**2
+            + rho0 * (state.vx**2 + state.vy**2)
+        ))
+
+    initial_energy = acoustic_energy(fields)
+    result = integrate(fields, grid, params, dt=0.01, n_steps=100)
+    final_energy = acoustic_energy(result)
+
+    # SSP-RK3 is dissipative, rather than exponentially amplifying, for
+    # the imaginary eigenvalues of the centred periodic acoustic operator.
+    assert final_energy <= initial_energy * (1.0 + 1e-9)
