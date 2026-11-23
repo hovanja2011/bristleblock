@@ -74,3 +74,28 @@ def test_box_dimensions_must_be_positive_and_finite():
     for dimensions in [(0, 2), (-1, 2), (np.inf, 2), (2, np.nan)]:
         with pytest.raises(ValueError):
             BoxMaze(*dimensions)
+
+def test_box_conservative_density_flux_converges_under_grid_refinement():
+    """The first-order upwind mass flux should converge for smooth fields."""
+    errors = []
+    for n in (20, 40, 80):
+        maze = BoxMaze(1.0, 1.0)
+        grid = maze.grid(n, n)
+        x, y = grid.coordinates()
+        sx, sy = np.sin(np.pi*x), np.sin(np.pi*y)
+
+        # A smooth divergence-free velocity field tangent to all four walls,
+        # generated from psi = sin(pi*x)^2 * sin(pi*y)^2.
+        vx = 2.0*np.pi*sx**2*sy*np.cos(np.pi*y)
+        vy = -2.0*np.pi*sx*np.cos(np.pi*x)*sy**2
+        rho = 1.0 + 0.1*np.cos(np.pi*x)*np.cos(np.pi*y)
+
+        drho_dx = -0.1*np.pi*np.sin(np.pi*x)*np.cos(np.pi*y)
+        drho_dy = -0.1*np.pi*np.cos(np.pi*x)*np.sin(np.pi*y)
+        exact = -(vx*drho_dx + vy*drho_dy)  # div(v) = 0 analytically
+        numerical = maze.operators().density_rhs(rho, vx, vy, grid)
+        errors.append(float(np.sqrt(np.mean((numerical-exact)**2))))
+
+    # First-order upwinding is expected to converge at least linearly.
+    assert errors[0]/errors[1] > 2.0
+    assert errors[1]/errors[2] > 2.0
