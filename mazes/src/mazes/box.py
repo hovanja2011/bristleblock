@@ -1,73 +1,115 @@
-"""Rectangular closed-box geometry and its boundary-aware operators."""
+"""Rectangular closed-box geometry and impermeable free-slip operators."""
 from dataclasses import dataclass
 import numpy as np
 from toner_tu.fields import Grid
+
 
 @dataclass(frozen=True)
 class BoxMaze:
     """Empty rectangular container with four impermeable outer walls."""
     width: float
     height: float
-    def __post_init__(self):
-        if not np.isfinite([self.width,self.height]).all() or self.width<=0 or self.height<=0:
+
+    def __post_init__(self) -> None:
+        dimensions = np.asarray([self.width, self.height], dtype=float)
+        if not np.isfinite(dimensions).all() or np.any(dimensions <= 0):
             raise ValueError("Box dimensions must be finite and positive.")
-    def grid(self,nx:int,ny:int)->Grid:
-        """Construct a cell-centred grid covering the physical box."""
-        return Grid(nx=nx,ny=ny,lx=self.width,ly=self.height)
-    def operators(self):
-        """Return the numerical operators that impose closed-box walls."""
+
+    def grid(self, nx: int, ny: int) -> Grid:
+        """Construct a uniform cell-centred grid covering the physical box."""
+        return Grid(nx=nx, ny=ny, lx=self.width, ly=self.height)
+
+    def operators(self) -> "BoxDomainOperators":
+        """Return the numerical operators imposing closed-box wall conditions."""
         return BoxDomainOperators()
 
+
 class BoxDomainOperators:
-    """Spatial operators for a closed box.
+    """Boundary-aware finite differences for a closed rectangular box.
 
-    All four walls impose zero normal mass flux. Density and tangential
-    velocity use even reflection; the velocity component normal to a wall
-    uses odd reflection. This is a simple cell-centred free-slip wall model.
+    Scalars and tangential velocity components use even reflection (zero
+    normal derivative). The velocity component normal to a wall uses odd
+    reflection, placing zero normal velocity at the wall face. Density
+    transport uses conservative face fluxes with zero external flux.
     """
-    @staticmethod
-    def _ghost(field,component):
-        ny,nx=field.shape
-        g=np.empty((ny+2,nx+2),dtype=float)
-        g[1:-1,1:-1]=field
-        # Left/right walls: x velocity is the wall-normal component.
-        g[1:-1,0]= -field[:,0] if component=="vx" else field[:,0]
-        g[1:-1,-1]= -field[:,-1] if component=="vx" else field[:,-1]
-        # Bottom/top walls: y velocity is the wall-normal component.
-        g[0,1:-1]= -field[0,:] if component=="vy" else field[0,:]
-        g[-1,1:-1]= -field[-1,:] if component=="vy" else field[-1,:]
-        g[0,0],g[0,-1]=g[0,1],g[0,-2]
-        g[-1,0],g[-1,-1]=g[-1,1],g[-1,-2]
-        return g
-    def gradient(self,field,grid):
-        """Central gradient with zero-normal-gradient scalar wall values."""
-        g=self._ghost(field,"rho")
-        return ((g[1:-1,2:]-g[1:-1,:-2])/(2*grid.dx),
-                (g[2:,1:-1]-g[:-2,1:-1])/(2*grid.dy))
-    def laplacian(self,field,grid,component):
-        """Five-point Laplacian with component-aware reflected wall values."""
-        g=self._ghost(field,component); c=g[1:-1,1:-1]
-        return ((g[1:-1,2:]-2*c+g[1:-1,:-2])/grid.dx**2
-                +(g[2:,1:-1]-2*c+g[:-2,1:-1])/grid.dy**2)
-    def advective_derivative(self,vx,vy,grid):
-        """First-order upwind (v·grad)v using wall-consistent ghost cells."""
-        def upwind(field,component):
-            g=self._ghost(field,component)
-            dx=np.where(vx>=0,(field-g[1:-1,:-2])/grid.dx,(g[1:-1,2:]-field)/grid.dx)
-            dy=np.where(vy>=0,(field-g[:-2,1:-1])/grid.dy,(g[2:,1:-1]-field)/grid.dy)
-            return dx,dy
-        ax,ay=upwind(vx,"vx"); bx,by=upwind(vy,"vy")
-        return vx*ax+vy*ay, vx*bx+vy*by
-    def density_rhs(self,rho,vx,vy,grid):
-        """Conservative upwind finite-volume continuity equation.
 
-        Boundary face fluxes are exactly zero, so total mass is conserved.
-        """
-        ny,nx=rho.shape
-        u=np.zeros((ny,nx+1)); v=np.zeros((ny+1,nx))
-        u[:,1:-1]=0.5*(vx[:,:-1]+vx[:,1:])
-        v[1:-1,:]=0.5*(vy[:-1,:]+vy[1:,:])
-        fx=np.zeros_like(u); fy=np.zeros_like(v)
-        fx[:,1:-1]=np.maximum(u[:,1:-1],0)*rho[:,:-1]+np.minimum(u[:,1:-1],0)*rho[:,1:]
-        fy[1:-1,:]=np.maximum(v[1:-1,:],0)*rho[:-1,:]+np.minimum(v[1:-1,:],0)*rho[1:,:]
-        return -((fx[:,1:]-fx[:,:-1])/grid.dx+(fy[1:,:]-fy[:-1,:])/grid.dy)
+    @staticmethod
+    def _ghost(field: np.ndarray, component: str) -> np.ndarray:
+        """Add one reflected ghost-cell layer around a cell-centred field."""
+        if component not in {"rho", "vx", "vy"}:
+            raise ValueError("component must be 'rho', 'vx' or 'vy'.")
+        if field.ndim != 2 or min(field.shape) < 2:
+            raise ValueError("field must be 2D with at least 2 cells per axis.")
+        ny, nx = field.shape
+        ghost = np.empty((ny + 2, nx + 2), dtype=float)
+        ghost[1:-1, 1:-1] = field
+
+        # Left/right walls: vx is normal; vy and rho are even-reflected.
+        sign_x = -1.0 if component == "vx" else 1.0
+        ghost[1:-1, 0] = sign_x * field[:, 0]
+        ghost[1:-1, -1] = sign_x * field[:, -1]
+
+        # Bottom/top walls: vy is normal; vx and rho are even-reflected.
+        sign_y = -1.0 if component == "vy" else 1.0
+        ghost[0, 1:-1] = sign_y * field[0, :]
+        ghost[-1, 1:-1] = sign_y * field[-1, :]
+
+        # The five-point stencils do not use corner ghosts, but initialize them.
+        ghost[0, 0] = ghost[0, 1]
+        ghost[0, -1] = ghost[0, -2]
+        ghost[-1, 0] = ghost[-1, 1]
+        ghost[-1, -1] = ghost[-1, -2]
+        return ghost
+
+    def gradient(self, field: np.ndarray, grid: Grid) -> tuple[np.ndarray, np.ndarray]:
+        """Second-order centred gradient with homogeneous Neumann walls."""
+        ghost = self._ghost(field, "rho")
+        dfdx = (ghost[1:-1, 2:] - ghost[1:-1, :-2]) / (2.0 * grid.dx)
+        dfdy = (ghost[2:, 1:-1] - ghost[:-2, 1:-1]) / (2.0 * grid.dy)
+        return dfdx, dfdy
+
+    def laplacian(self, field: np.ndarray, grid: Grid, component: str) -> np.ndarray:
+        """Five-point Laplacian with component-aware reflected wall values."""
+        ghost = self._ghost(field, component)
+        centre = ghost[1:-1, 1:-1]
+        d2dx2 = (ghost[1:-1, 2:] - 2.0*centre + ghost[1:-1, :-2]) / grid.dx**2
+        d2dy2 = (ghost[2:, 1:-1] - 2.0*centre + ghost[:-2, 1:-1]) / grid.dy**2
+        return d2dx2 + d2dy2
+
+    def advective_derivative(self, vx: np.ndarray, vy: np.ndarray, grid: Grid) -> tuple[np.ndarray, np.ndarray]:
+        """First-order upwind approximation of (v dot grad)v."""
+        def upwind(field: np.ndarray, component: str) -> tuple[np.ndarray, np.ndarray]:
+            ghost = self._ghost(field, component)
+            dfdx = np.where(vx >= 0.0, (field - ghost[1:-1, :-2])/grid.dx,
+                            (ghost[1:-1, 2:] - field)/grid.dx)
+            dfdy = np.where(vy >= 0.0, (field - ghost[:-2, 1:-1])/grid.dy,
+                            (ghost[2:, 1:-1] - field)/grid.dy)
+            return dfdx, dfdy
+        dvx_dx, dvx_dy = upwind(vx, "vx")
+        dvy_dx, dvy_dy = upwind(vy, "vy")
+        return vx*dvx_dx + vy*dvx_dy, vx*dvy_dx + vy*dvy_dy
+
+    def face_velocities(self, vx: np.ndarray, vy: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Interpolate cell velocities to faces; external normal faces are zero."""
+        if vx.shape != vy.shape or vx.ndim != 2:
+            raise ValueError("vx and vy must be 2D arrays with identical shapes.")
+        ny, nx = vx.shape
+        u_face = np.zeros((ny, nx + 1), dtype=float)
+        v_face = np.zeros((ny + 1, nx), dtype=float)
+        u_face[:, 1:-1] = 0.5*(vx[:, :-1] + vx[:, 1:])
+        v_face[1:-1, :] = 0.5*(vy[:-1, :] + vy[1:, :])
+        return u_face, v_face
+
+    def density_rhs(self, rho: np.ndarray, vx: np.ndarray, vy: np.ndarray, grid: Grid) -> np.ndarray:
+        """Conservative first-order upwind continuity equation with closed walls."""
+        if rho.shape != vx.shape or rho.shape != vy.shape or rho.shape != (grid.ny, grid.nx):
+            raise ValueError("rho, vx and vy must match the supplied grid.")
+        u_face, v_face = self.face_velocities(vx, vy)
+        flux_x = np.zeros_like(u_face)
+        flux_y = np.zeros_like(v_face)
+        flux_x[:, 1:-1] = (np.maximum(u_face[:, 1:-1], 0.0)*rho[:, :-1]
+                           + np.minimum(u_face[:, 1:-1], 0.0)*rho[:, 1:])
+        flux_y[1:-1, :] = (np.maximum(v_face[1:-1, :], 0.0)*rho[:-1, :]
+                           + np.minimum(v_face[1:-1, :], 0.0)*rho[1:, :])
+        return -((flux_x[:, 1:] - flux_x[:, :-1])/grid.dx
+                 + (flux_y[1:, :] - flux_y[:-1, :])/grid.dy)
