@@ -35,7 +35,8 @@ def step(robot, dt, walls=None, contact_parameters=None):
     rotational_drag_torque = (
         -robot.rotational_drag * robot.omega
     )
-    active_torque = robot.active_torque + robot.propulsion_torque
+    propulsion_torque = robot.propulsion_torque
+    active_torque = robot.active_torque + propulsion_torque
 
     # Contact diagnostics
     normal_contact_force = np.zeros(2)
@@ -115,7 +116,7 @@ def step(robot, dt, walls=None, contact_parameters=None):
         "total_force": total_force.copy(),
 
         "active_torque": robot.active_torque,
-        "propulsion_torque": robot.propulsion_torque,
+        "propulsion_torque": propulsion_torque,
         "rotational_drag_torque": rotational_drag_torque,
         "normal_contact_torque": normal_contact_torque,
         "tangential_contact_torque": tangential_contact_torque,
@@ -207,7 +208,8 @@ def step_robots(
             -robot.rotational_drag * robot.omega
         )
 
-        active_torque = robot.active_torque + robot.propulsion_torque
+        propulsion_torque = robot.propulsion_torque
+        active_torque = robot.active_torque + propulsion_torque
 
         # Wall-contact contributions
         normal_contact_force = np.zeros(2)
@@ -271,7 +273,7 @@ def step_robots(
             "total_contact_force": total_wall_contact_force.copy(),
 
             "active_torque": robot.active_torque,
-        "propulsion_torque": robot.propulsion_torque,
+            "propulsion_torque": propulsion_torque,
             "rotational_drag_torque": rotational_drag_torque,
             "normal_contact_torque": normal_contact_torque,
             "tangential_contact_torque": tangential_contact_torque,
