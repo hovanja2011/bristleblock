@@ -1,3 +1,4 @@
+"""Rigid-body state and active propulsion parameters for one bristlebot."""
 
 import numpy as np
 
