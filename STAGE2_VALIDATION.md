@@ -1,6 +1,6 @@
 # Stage 2 — reproducible verification and visualization
 
-Status: the full validation suite passes in GitHub Actions. Run #22 executes all three test groups and all seven quantitative experiment scripts; the resulting CSV tables and PNG figures are also uploaded as the workflow artifact named validation-results.
+Status: the full validation suite passes in GitHub Actions. Run #22 produced the numerical results summarized below. Run #23 reran all three test groups and all seven quantitative experiment scripts, then uploaded the CSV tables and PNG figures as the validation-results workflow artifact.
 
 ## Keep three kinds of evidence separate
 
