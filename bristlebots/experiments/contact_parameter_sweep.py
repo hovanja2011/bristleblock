@@ -28,7 +28,7 @@ def _invariants(robots):
     momentum = sum((r.mass * r.velocity for r in robots), np.zeros(2))
     angular = sum(
         r.moment_of_inertia * r.omega
-        + r.mass * np.cross(r.position, r.velocity)
+        + r.mass * (r.position[0]*r.velocity[1] - r.position[1]*r.velocity[0])
         for r in robots
     )
     energy = sum(
